@@ -18,6 +18,16 @@ The npm package keeps its existing name for compatibility. Official source, issu
 npm install @ldclabs/ic_oss_ts @dfinity/agent @dfinity/principal
 ```
 
+### Build from source
+
+```bash
+git clone https://github.com/storica-oss/ic-oss-ts.git
+cd ic-oss-ts
+npm ci
+npm test
+npm run build
+```
+
 ## Quick start
 
 The identity passed to the agent must be authorized by the OSS as a Manager or Reader. Anonymous access only works for data exposed by the Bucket's public policy.
