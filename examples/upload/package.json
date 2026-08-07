@@ -1,0 +1,22 @@
+{
+  "name": "upload_js",
+  "version": "1.0.0",
+  "type": "module",
+  "module": "ESNext",
+  "main": "upload.js",
+  "scripts": {
+    "identity": "node generate_identity.js",
+    "upload": "node upload.js",
+    "test": "node --check upload.js && node --check generate_identity.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "description": "Safe Node.js upload example for IC OSS using @ldclabs/ic_oss_ts.",
+  "dependencies": {
+    "@dfinity/agent": "^3.4.3",
+    "@dfinity/identity": "^3.4.3",
+    "@dfinity/principal": "^3.4.3",
+    "@dfinity/utils": "^4.0.1",
+    "@ldclabs/ic_oss_ts": "file:../.."
+  }
+}

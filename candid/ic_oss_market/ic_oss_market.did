@@ -1,0 +1,391 @@
+// [Account](https://github.com/dfinity/ICRC-1/blob/main/standards/ICRC-3/README.md#value)
+// representation of ledgers supporting the ICRC-1 standard.
+type Account = record { owner : principal; subaccount : opt blob };
+type BeginWasmUploadInput = record {
+  expected_size : nat64;
+  version : text;
+  expected_sha256 : blob;
+  release_notes : text;
+};
+type CreateOrderInput = record {
+  name : text;
+  deployment_target_id : opt text;
+  idempotency_key : text;
+};
+type Deployment = record {
+  id : nat64;
+  controller_checked_at_ms : opt nat64;
+  last_error : opt text;
+  status : DeploymentStatus;
+  market_controller_status : MarketControllerStatus;
+  version_id : nat64;
+  owner : principal;
+  subnet_id : opt principal;
+  name : text;
+  updated_at_ms : nat64;
+  created_at_ms : nat64;
+  canister : opt principal;
+  observed_module_hash : opt blob;
+  deployment_target_id : text;
+};
+type DeploymentPage = record {
+  total : nat64;
+  next_cursor : opt nat64;
+  items : vec Deployment;
+};
+type DeploymentStatus = variant {
+  Creating;
+  Failed;
+  Installing;
+  Active;
+  UpgradePending;
+};
+type DeploymentTarget = record {
+  id : text;
+  region : text;
+  node_count : nat16;
+  description_zh : opt text;
+  topology_updated_at_ms : nat64;
+  // None creates on the Market canister's subnet. Some(id) uses the CMC.
+  subnet_id : opt principal;
+  name : text;
+  sort_order : nat16;
+  description : text;
+  region_zh : opt text;
+  data_residency : bool;
+  enabled : bool;
+  name_zh : opt text;
+  cost_multiplier_basis_points : nat32;
+  country_count : nat16;
+};
+type HttpRequest = record {
+  url : text;
+  method : text;
+  body : blob;
+  headers : vec record { text; text };
+};
+type HttpResponse = record {
+  body : blob;
+  headers : vec record { text; text };
+  upgrade : opt bool;
+  status_code : nat16;
+};
+type IcpWithdrawal = record {
+  id : nat64;
+  to : Account;
+  last_error : opt text;
+  status : IcpWithdrawalStatus;
+  completed_at_ms : opt nat64;
+  ledger_block : opt nat64;
+  fee_e8s : nat64;
+  requested_by : principal;
+  created_at_ms : nat64;
+  amount_e8s : nat64;
+  ledger : principal;
+  transfer_created_at_time : nat64;
+  idempotency_key : text;
+};
+type IcpWithdrawalPage = record {
+  total : nat64;
+  next_cursor : opt nat64;
+  items : vec IcpWithdrawal;
+};
+type IcpWithdrawalStatus = variant { Failed; Completed; Pending };
+type InitArgs = record {
+  owner : opt principal;
+  create_price_e8s : opt nat64;
+  deployment_cycles : opt nat;
+  upgrade_price_e8s : opt nat64;
+  sales_enabled : opt bool;
+  payment_ledger : opt principal;
+};
+type MarketConfig = record {
+  deployment_targets : vec record { text; DeploymentTarget };
+  custom_domains : opt vec text;
+  owner : principal;
+  create_price_e8s : nat64;
+  deployment_cycles : nat;
+  admins : vec principal;
+  upgrade_price_e8s : nat64;
+  sales_enabled : bool;
+  pending_owner : opt principal;
+  payment_ledger : opt principal;
+};
+type MarketControllerStatus = variant {
+  Missing;
+  Present;
+  Unreachable;
+  Unknown;
+};
+type MarketCyclesStatus = record {
+  balance : nat;
+  reserved_deployment_cycles : nat;
+  available_deployment_slots : nat64;
+  deployment_cycles : nat;
+  transferable_cycles : nat;
+  reserve_cycles : nat;
+};
+type MarketDomainConfig = record {
+  derivation_origin : text;
+  custom_domains : vec text;
+  canister_id : principal;
+};
+type MarketIcpRevenue = record {
+  withdrawable_e8s : nat64;
+  ledger_fee_e8s : nat64;
+  ledger : principal;
+  withdrawn_e8s : nat64;
+  balance_e8s : nat64;
+  market_account : Account;
+  recorded_revenue_e8s : nat64;
+};
+type MarketSalesReadiness = record {
+  blockers : vec SalesReadinessBlocker;
+  available_deployment_slots : nat64;
+  ready : bool;
+};
+type MarketStorageStatus = record {
+  previous_snapshot_bytes : nat64;
+  wasm_versions : nat64;
+  active_generation : nat8;
+  pending_upload_bytes : nat64;
+  wasm_bytes : nat64;
+  active_snapshot_bytes : nat64;
+  layout_version : nat16;
+};
+type MarketUpgradeReadiness = record {
+  processing_orders : nat64;
+  provisioning_orders : nat64;
+  pending_withdrawals : nat64;
+  refunding_orders : nat64;
+  paid_orders : nat64;
+  ready : bool;
+};
+type OperationKind = variant { Upgrade; Create };
+type Order = record {
+  id : nat64;
+  last_error : opt text;
+  status : OrderStatus;
+  requested_name : opt text;
+  refunded_at_ms : opt nat64;
+  kind : OperationKind;
+  ledger_block : opt nat64;
+  target_subnet_id : opt principal;
+  created_at_ms : nat64;
+  amount_e8s : nat64;
+  deployment_cycles : opt nat;
+  transfer_created_at_time : nat64;
+  provisioning_started_at_ms : opt nat64;
+  refund_block : opt nat64;
+  refund_transfer_created_at_time : opt nat64;
+  buyer : principal;
+  target_version_id : nat64;
+  deployment_target_id : text;
+  expires_at_ms : nat64;
+  deployment_id : opt nat64;
+  idempotency_key : text;
+  payment_ledger : opt principal;
+};
+type OrderPage = record {
+  total : nat64;
+  next_cursor : opt nat64;
+  items : vec Order;
+};
+type OrderStatus = variant {
+  Refunding;
+  Failed;
+  Refunded;
+  Paid;
+  Processing;
+  Provisioning;
+  Completed;
+  Pending;
+};
+type OssAccess = record {
+  market_controller : principal;
+  controllers : vec principal;
+  managers : vec principal;
+  canister : principal;
+  deployment_id : nat64;
+};
+type PageRequest = record { cursor : opt nat64; limit : nat16 };
+type PublicConfig = record {
+  deployment_targets : vec DeploymentTarget;
+  available_deployment_slots : nat64;
+  create_price_e8s : nat64;
+  upgrade_price_e8s : nat64;
+  latest_version : opt WasmVersionSummary;
+  sales_enabled : bool;
+  payment_ledger : opt principal;
+};
+type Result = variant { Ok : MarketConfig; Err : text };
+type Result_1 = variant { Ok : nat64; Err : text };
+type Result_10 = variant { Ok : vec Order; Err : text };
+type Result_11 = variant { Ok : OrderPage; Err : text };
+type Result_12 = variant { Ok : vec UserSummary; Err : text };
+type Result_13 = variant { Ok : UserSummaryPage; Err : text };
+type Result_14 = variant { Ok : Order; Err : text };
+type Result_15 = variant { Ok : MarketDomainConfig; Err : text };
+type Result_16 = variant { Ok : TransferMarketCyclesOutput; Err : text };
+type Result_17 = variant { Ok : DeploymentTarget; Err : text };
+type Result_18 = variant { Ok : IcpWithdrawal; Err : text };
+type Result_19 = variant { Ok : Deployment; Err : text };
+type Result_2 = variant { Ok : WasmVersionSummary; Err : text };
+type Result_20 = variant { Ok : OssAccess; Err : text };
+type Result_21 = variant { Ok : record { principal; bool }; Err : text };
+type Result_22 = variant { Ok : vec UpgradeRecord; Err : text };
+type Result_23 = variant { Ok : UpgradePage; Err : text };
+type Result_24 = variant { Ok : WasmVersionPage; Err : text };
+type Result_3 = variant { Ok : MarketCyclesStatus; Err : text };
+type Result_4 = variant { Ok : MarketIcpRevenue; Err : text };
+type Result_5 = variant { Ok : MarketStorageStatus; Err : text };
+type Result_6 = variant { Ok : MarketUpgradeReadiness; Err : text };
+type Result_7 = variant { Ok : vec Deployment; Err : text };
+type Result_8 = variant { Ok : DeploymentPage; Err : text };
+type Result_9 = variant { Ok : IcpWithdrawalPage; Err : text };
+type SalesReadinessBlocker = variant {
+  DeploymentTargetMissing;
+  PaymentLedgerMissing;
+  UpgradePriceZero;
+  PublishedWasmMissing;
+  InsufficientCycles;
+  CreatePriceZero;
+  DeploymentCyclesZero;
+};
+type SetOssControllersInput = record {
+  controllers : vec principal;
+  expected_controllers : vec principal;
+  deployment_id : nat64;
+};
+type SetOssManagersInput = record {
+  managers : vec principal;
+  expected_managers : vec principal;
+  deployment_id : nat64;
+};
+type TransferMarketCyclesInput = record {
+  to_canister : principal;
+  amount : nat;
+};
+type TransferMarketCyclesOutput = record {
+  transferred : nat;
+  required_reserve : nat;
+  remaining_balance : nat;
+};
+type UpdateConfigInput = record {
+  create_price_e8s : nat64;
+  deployment_cycles : nat;
+  upgrade_price_e8s : nat64;
+  sales_enabled : bool;
+  payment_ledger : opt principal;
+};
+type UpgradeOrderInput = record {
+  deployment_id : nat64;
+  idempotency_key : text;
+};
+type UpgradePage = record {
+  total : nat64;
+  next_cursor : opt nat64;
+  items : vec UpgradeRecord;
+};
+type UpgradeRecord = record {
+  id : nat64;
+  status : DeploymentStatus;
+  to_version_id : nat64;
+  completed_at_ms : opt nat64;
+  from_version_id : nat64;
+  ledger_block : opt nat64;
+  error : opt text;
+  created_at_ms : nat64;
+  amount_e8s : nat64;
+  to_module_hash : opt blob;
+  canister : principal;
+  order_id : nat64;
+  from_module_hash : opt blob;
+  deployment_id : nat64;
+};
+type UserPageRequest = record { cursor : opt principal; limit : nat16 };
+type UserSummary = record {
+  last_active_at_ms : nat64;
+  total_paid_e8s : nat64;
+  "principal" : principal;
+  order_count : nat64;
+  deployment_count : nat64;
+};
+type UserSummaryPage = record {
+  total : nat64;
+  next_cursor : opt principal;
+  items : vec UserSummary;
+};
+type WasmVersionPage = record {
+  total : nat64;
+  next_cursor : opt nat64;
+  items : vec WasmVersionSummary;
+};
+type WasmVersionSummary = record {
+  id : nat64;
+  published : bool;
+  size : nat64;
+  created_by : principal;
+  wasm_sha256 : blob;
+  created_at_ms : nat64;
+  version : text;
+  release_notes : text;
+};
+type WithdrawIcpInput = record {
+  to : Account;
+  amount_e8s : nat64;
+  idempotency_key : text;
+};
+service : (InitArgs) -> {
+  accept_market_ownership : () -> (Result);
+  admin_begin_wasm_upload : (BeginWasmUploadInput) -> (Result_1);
+  admin_cleanup_expired_orders : () -> (Result_1);
+  admin_commit_wasm_upload : (nat64, bool) -> (Result_2);
+  admin_get_config : () -> (Result) query;
+  admin_get_cycles_status : () -> (Result_3) query;
+  admin_get_icp_revenue : () -> (Result_4);
+  admin_get_storage_status : () -> (Result_5) query;
+  admin_get_upgrade_readiness : () -> (Result_6) query;
+  admin_list_deployments : () -> (Result_7) query;
+  admin_list_deployments_page : (PageRequest) -> (Result_8) query;
+  admin_list_icp_withdrawals_page : (PageRequest) -> (Result_9) query;
+  admin_list_orders : () -> (Result_10) query;
+  admin_list_orders_page : (PageRequest) -> (Result_11) query;
+  admin_list_users : () -> (Result_12) query;
+  admin_list_users_page : (UserPageRequest) -> (Result_13) query;
+  admin_propose_owner : (opt principal) -> (Result);
+  admin_reconcile_order_refund : (nat64, nat64) -> (Result_14);
+  admin_refund_order : (nat64) -> (Result_14);
+  admin_remove_deployment_target : (text) -> (Result);
+  admin_set_admin : (principal, bool) -> (Result);
+  admin_set_custom_domains : (vec text) -> (Result_15);
+  admin_set_version_published : (nat64, bool) -> (Result_2);
+  admin_transfer_cycles : (TransferMarketCyclesInput) -> (Result_16);
+  admin_update_config : (UpdateConfigInput) -> (Result);
+  admin_upload_wasm_chunk : (nat64, nat32, blob) -> (Result_1);
+  admin_upsert_deployment_target : (DeploymentTarget) -> (Result_17);
+  admin_withdraw_icp : (WithdrawIcpInput) -> (Result_18);
+  create_deployment_order : (CreateOrderInput) -> (Result_14);
+  create_upgrade_order : (UpgradeOrderInput) -> (Result_14);
+  detach_market_from_my_oss : (nat64) -> (Result_19);
+  get_domain_config : () -> (MarketDomainConfig) query;
+  get_market_sales_readiness : () -> (MarketSalesReadiness) query;
+  get_my_oss_access : (nat64) -> (Result_20);
+  get_public_config : () -> (PublicConfig) query;
+  get_session : () -> (Result_21) query;
+  http_request : (HttpRequest) -> (HttpResponse) query;
+  list_my_deployments : () -> (Result_7) query;
+  list_my_deployments_page : (PageRequest) -> (Result_8) query;
+  list_my_orders : () -> (Result_10) query;
+  list_my_orders_page : (PageRequest) -> (Result_11) query;
+  list_my_upgrades : () -> (Result_22) query;
+  list_my_upgrades_page : (PageRequest) -> (Result_23) query;
+  list_versions : () -> (vec WasmVersionSummary) query;
+  list_versions_page : (PageRequest) -> (Result_24) query;
+  pay_order : (nat64) -> (Result_14);
+  reconcile_order_payment : (nat64, nat64) -> (Result_14);
+  refresh_my_deployment : (nat64) -> (Result_19);
+  retry_order : (nat64) -> (Result_14);
+  set_my_oss_controllers : (SetOssControllersInput) -> (Result_20);
+  set_my_oss_managers : (SetOssManagersInput) -> (Result_20);
+}

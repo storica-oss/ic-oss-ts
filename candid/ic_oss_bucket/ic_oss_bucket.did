@@ -1,0 +1,740 @@
+type AbortUploadInput = record { request_id : blob; session_id : blob };
+type BatchCreateSmallFilesInput = record {
+  files : vec CreateFileInput;
+  request_id : blob;
+};
+type BatchCreateSmallFilesOutput = record { results : vec Result_6 };
+type BatchEnsureFoldersInput = record {
+  request_id : blob;
+  folders : vec CreateFolderInput;
+};
+type BatchEnsureFoldersOutput = record { results : vec Result_9 };
+type BatchUpsertReaderGrantsInput = record {
+  request_id : blob;
+  grants : vec ReaderGrantSpec;
+};
+type BatchUpsertReaderGrantsOutput = record { results : vec Result_2 };
+type BeginUploadInput = record {
+  dek : opt blob;
+  request_id : blob;
+  status : int8;
+  custom : opt vec record { text; MetadataValue };
+  hash : opt blob;
+  expected_parent_revision : nat64;
+  name : text;
+  size : nat64;
+  content_type : text;
+  replace : opt ReplaceFileInput;
+  parent : nat32;
+};
+type BeginUploadOutput = record {
+  total_chunks : nat32;
+  session_id : blob;
+  generation : nat64;
+  chunk_size : nat32;
+  expires_at : nat64;
+  file_id : nat32;
+};
+type BucketCapabilities = record {
+  batch_operations : opt bool;
+  reader_grants : opt bool;
+  api_version : nat16;
+  incremental_gc : bool;
+  migration_state : MigrationState;
+  ensure_folder : bool;
+  storage_metrics : opt bool;
+  conditional_delete : bool;
+  unique_names : bool;
+  get_entry : bool;
+  http_read_modes : opt bool;
+  storage_version : nat16;
+  manifest : bool;
+  atomic_commit : bool;
+  upload_sessions : bool;
+};
+type BucketInfo = record {
+  status : int8;
+  reader_policy : opt ReaderPolicy;
+  total_chunks : nat64;
+  trusted_eddsa_pub_keys : vec blob;
+  managers : vec principal;
+  governance_canister : opt principal;
+  name : text;
+  max_custom_data_size : nat16;
+  auditors : vec principal;
+  http_read_mode : opt HttpReadMode;
+  total_files : nat64;
+  max_children : nat16;
+  enable_hash_index : bool;
+  max_file_size : nat64;
+  folder_id : nat32;
+  visibility : nat8;
+  max_folder_depth : nat8;
+  trusted_ecdsa_pub_keys : vec blob;
+  total_folders : nat64;
+  file_id : nat32;
+};
+// Capacity signals reported by the Bucket itself. Stable-memory remaining
+// space is necessarily an estimate: the platform limit is fixed per canister,
+// while successful growth also depends on subnet capacity and cycle reserves.
+type BucketStorageMetrics = record {
+  total_memory_size : nat64;
+  stable_memory_size : nat64;
+  // Spendable cycles currently held by the Bucket.
+  cycles : opt nat;
+  stable_memory_limit : nat64;
+  wasm_memory_size : nat64;
+  memory_allocation : nat64;
+  // Cycles reserved by the subnet for future storage payments.
+  reserved_cycles : opt nat;
+};
+type CanisterArgs = variant { Upgrade : UpgradeArgs; Init : InitArgs };
+// # Canister Status Result
+//
+// Result type of [`canister_status`](https://internetcomputer.org/docs/current/references/ic-interface-spec/#ic-canister_status).
+type CanisterStatusResult = record {
+  // The detailed metrics on the memory consumption of the canister.
+  memory_metrics : MemoryMetrics;
+  // Status of the canister.
+  status : CanisterStatusType;
+  // The memory size taken by the canister.
+  memory_size : nat;
+  // Indicates whether a stopped canister is ready to be migrated to another subnet
+  // (i.e., whether it has empty queues and flushed streams).
+  ready_for_migration : bool;
+  // The canister version.
+  version : nat64;
+  // The cycle balance of the canister.
+  cycles : nat;
+  // Canister settings in effect.
+  settings : DefiniteCanisterSettings;
+  // Query statistics.
+  query_stats : QueryStats;
+  // Amount of cycles burned per day.
+  idle_cycles_burned_per_day : nat;
+  // A SHA256 hash of the module installed on the canister. This is null if the canister is empty.
+  module_hash : opt blob;
+  // The reserved cycles balance of the canister.
+  //
+  // These are cycles that are reserved by the resource reservation mechanism on storage allocation.
+  // See also the [`CanisterSettings::reserved_cycles_limit`] parameter in canister settings.
+  reserved_cycles : nat;
+};
+// # Canister Status Type
+//
+// Status of a canister.
+//
+// See [`CanisterStatusResult::status`].
+type CanisterStatusType = variant {
+  // The canister is stopped.
+  stopped;
+  // The canister is stopping.
+  stopping;
+  // The canister is running.
+  running;
+};
+type CollectGarbageInput = record {
+  // Maximum number of chunk slots to process in this call.
+  max_chunks : opt nat32;
+};
+type CollectGarbageOutput = record {
+  removed_chunks : nat32;
+  remaining_items : nat64;
+  processed_chunks : nat32;
+  completed_items : nat32;
+  remaining_chunks : nat64;
+};
+type CommitUploadOutput = record {
+  id : nat32;
+  created : bool;
+  committed_at : nat64;
+  generation : nat64;
+  revision : nat64;
+};
+type CreateFileInput = record {
+  dek : opt blob;
+  status : opt int8;
+  content : opt blob;
+  custom : opt vec record { text; MetadataValue };
+  hash : opt blob;
+  name : text;
+  size : opt nat64;
+  content_type : text;
+  parent : nat32;
+};
+type CreateFileOutput = record { id : nat32; created_at : nat64 };
+type CreateFolderInput = record { name : text; parent : nat32 };
+// # Definite Canister Settings
+//
+// Represents the actual settings in effect.
+//
+// For return of [`canister_status`](https://internetcomputer.org/docs/current/references/ic-interface-spec/#ic-canister_status).
+type DefiniteCanisterSettings = record {
+  // Time in seconds after which the canister is considered frozen.
+  freezing_threshold : nat;
+  // Threshold on the remaining wasm memory size of the canister in bytes.
+  wasm_memory_threshold : nat;
+  // A list of environment variables.
+  environment_variables : vec EnvironmentVariable;
+  // Controllers of the canister.
+  controllers : vec principal;
+  // Upper limit on [`CanisterStatusResult::reserved_cycles`] of the canister.
+  reserved_cycles_limit : nat;
+  // Visibility of canister logs.
+  log_visibility : LogVisibility;
+  // Upper limit on the memory used for canister logs (bytes).
+  log_memory_limit : nat;
+  // Upper limit on the WASM heap memory (bytes) consumption of the canister.
+  wasm_memory_limit : nat;
+  // Total memory (bytes) the canister is allowed to use.
+  memory_allocation : nat;
+  // Guaranteed compute allocation as a percentage of the maximum compute power that a single canister can allocate.
+  compute_allocation : nat;
+};
+type DeleteEntryIfInput = record {
+  id : nat32;
+  request_id : blob;
+  kind : EntryKind;
+  expected_parent : nat32;
+  expected_hash : opt blob;
+  expected_revision : nat64;
+};
+type DirectoryStorageHealth = record {
+  migration_error : opt text;
+  stable_folders : nat64;
+  duplicate_names : nat64;
+  legacy_folders : nat64;
+  stable_names : nat64;
+  stable_children : nat64;
+  dangling_entries : nat64;
+};
+type DomainConfig = record {
+  derivation_origin : text;
+  custom_domains : vec text;
+  canister_id : principal;
+};
+type EnsureFolderInput = record {
+  request_id : blob;
+  name : text;
+  parent : nat32;
+};
+type EnsureFolderOutput = record {
+  id : nat32;
+  created : bool;
+  created_at : nat64;
+  revision : nat64;
+};
+type EntryCursor = record {
+  id : nat32;
+  kind : EntryKind;
+  parent_revision : nat64;
+};
+type EntryInfoV2 = record {
+  id : nat32;
+  status : int8;
+  updated_at : nat64;
+  hash : opt blob;
+  kind : EntryKind;
+  name : text;
+  size : opt nat64;
+  content_type : opt text;
+  created_at : nat64;
+  filled : opt nat64;
+  revision : nat64;
+  parent : nat32;
+};
+type EntryKind = variant { Folder; File };
+type EntryRef = record { id : nat32; kind : EntryKind };
+// # Environment Variable.
+type EnvironmentVariable = record {
+  // Value of the environment variable.
+  value : text;
+  // Name of the environment variable.
+  name : text;
+};
+// The immutable media-read metadata exposed to an authorized reader.
+//
+// It intentionally excludes upload/admin fields such as the parent directory,
+// custom metadata and encrypted data key.  Clients must pass `generation` to
+// every protected byte-read call so a replacement cannot mix old and new
+// content in one media stream.
+type FileDescriptor = record {
+  id : nat32;
+  hash : opt blob;
+  size : nat64;
+  generation : nat64;
+  content_type : text;
+  chunks : nat32;
+  chunk_size : nat32;
+};
+type FileInfo = record {
+  ex : opt vec record { text; MetadataValue };
+  id : nat32;
+  dek : opt blob;
+  status : int8;
+  updated_at : nat64;
+  custom : opt vec record { text; MetadataValue };
+  hash : opt blob;
+  name : text;
+  size : nat64;
+  generation : nat64;
+  content_type : text;
+  created_at : nat64;
+  filled : nat64;
+  chunks : nat32;
+  revision : nat64;
+  parent : nat32;
+};
+type FolderInfo = record {
+  id : nat32;
+  files : vec nat32;
+  status : int8;
+  updated_at : nat64;
+  name : text;
+  folders : vec nat32;
+  created_at : nat64;
+  revision : nat64;
+  parent : nat32;
+};
+type FolderName = record { id : nat32; name : text };
+type GcHealth = record {
+  pending_chunks : nat64;
+  pending_items : nat64;
+  oldest_enqueued_at : opt nat64;
+};
+type GetEntryInput = record { name : text; parent : nat32 };
+type GetUploadStatusInput = record {
+  session_id : blob;
+  take : opt nat16;
+  start : opt nat32;
+};
+type HttpReadMode = variant { TokenProtected; Disabled; Public; Legacy };
+type InitArgs = record {
+  governance_canister : opt principal;
+  name : text;
+  max_custom_data_size : nat16;
+  max_children : nat16;
+  enable_hash_index : bool;
+  max_file_size : nat64;
+  visibility : nat8;
+  max_folder_depth : nat8;
+  file_id : nat32;
+};
+type ListEntriesInput = record {
+  cursor : opt EntryCursor;
+  take : opt nat16;
+  parent : nat32;
+};
+type ListEntriesOutput = record {
+  next : opt EntryCursor;
+  entries : vec EntryInfoV2;
+  parent_revision : nat64;
+};
+// # Log Visibility.
+type LogVisibility = variant {
+  // Controllers.
+  controllers;
+  // Public.
+  public;
+  // Allowed viewers.
+  allowed_viewers : vec principal;
+};
+type ManifestEntry = record { path : text; entry : EntryInfoV2 };
+type ManifestFrame = record {
+  after : opt EntryRef;
+  path : text;
+  folder_id : nat32;
+};
+// # Memory Metrics
+//
+// Memory metrics of a canister.
+//
+// See [`CanisterStatusResult::memory_metrics`].
+type MemoryMetrics = record {
+  // Represents the memory occupied by the Wasm binary that is currently installed on the canister.
+  wasm_binary_size : nat;
+  // Represents the memory used by the canister's log store.
+  log_memory_store_size : nat;
+  // Represents the memory used by the Wasm chunk store of the canister.
+  wasm_chunk_store_size : nat;
+  // Represents the memory used for storing the canister's history.
+  canister_history_size : nat;
+  // Represents the stable memory usage of the canister.
+  stable_memory_size : nat;
+  // Represents the memory consumed by all snapshots that belong to this canister.
+  snapshots_size : nat;
+  // Represents the Wasm memory usage of the canister, i.e. the heap memory used by the canister's WebAssembly code.
+  wasm_memory_size : nat;
+  // Represents the memory usage of the global variables that the canister is using.
+  global_memory_size : nat;
+  // Represents the memory used by custom sections defined by the canister.
+  custom_sections_size : nat;
+};
+// Variant type for the `icrc1_metadata` endpoint values. The corresponding metadata keys are
+// arbitrary Unicode strings and must follow the pattern `<namespace>:<key>`, where `<namespace>`
+// is a string not containing colons. The namespace `icrc1` is reserved for keys defined in the
+// ICRC-1 standard. For more information, see the
+// [documentation of Metadata in the ICRC-1 standard](https://github.com/dfinity/ICRC-1/tree/main/standards/ICRC-1#metadata).
+// Note that the `MetadataValue` type is a subset of the [`icrc_ledger_types::icrc::generic_value::ICRC3Value`] type.
+type MetadataValue = variant { Int : int; Nat : nat; Blob : blob; Text : text };
+type MigrateDirectoryStorageInput = record { max_items : opt nat16 };
+type MigrateDirectoryStorageOutput = record {
+  folder_cursor : opt nat32;
+  error : opt text;
+  file_cursor : opt nat32;
+  state : MigrationState;
+  processed : nat16;
+};
+type MigrationState = variant { Failed; Migrating; Ready; Legacy };
+type MoveInput = record { id : nat32; to : nat32; from : nat32 };
+type OAuthAccount = record {
+  key : text;
+  status : OAuthAccountStatus;
+  provider : OAuthProvider;
+  avatar_url : text;
+  reviewed_at : opt nat64;
+  reviewed_by : opt principal;
+  email : text;
+  requested_at : nat64;
+  display_name : text;
+  last_login_at : nat64;
+};
+type OAuthAccountStatus = variant { Approved; Rejected; Pending };
+type OAuthBeginInput = record { provider : OAuthProvider; redirect_uri : text };
+type OAuthBeginOutput = record { authorization_url : text };
+type OAuthCompleteInput = record { code : text; state : text };
+type OAuthCompleteOutput = variant {
+  Approved : record { token : blob; account : OAuthAccount };
+  Rejected : OAuthAccount;
+  Pending : OAuthAccount;
+};
+type OAuthConfigInput = record {
+  redirect_uris : vec text;
+  google : opt OAuthProviderConfigInput;
+  schnorr_key_name : text;
+  session_ttl_seconds : nat64;
+  wechat : opt OAuthProviderConfigInput;
+};
+type OAuthProvider = variant { Wechat; Google };
+type OAuthProviderConfigInput = record {
+  client_id : text;
+  client_secret : text;
+};
+type OAuthProviderPublicConfig = record { client_id : text };
+type OAuthPublicConfig = record {
+  redirect_uris : vec text;
+  google : opt OAuthProviderPublicConfig;
+  wechat : opt OAuthProviderPublicConfig;
+};
+type OAuthReviewInput = record { key : text; status : OAuthAccountStatus };
+// # Query Stats
+//
+// Query statistics.
+//
+// See [`CanisterStatusResult::query_stats`].
+type QueryStats = record {
+  // Total number of payload bytes use for query call responses.
+  response_payload_bytes_total : nat;
+  // Total number of instructions executed by query calls.
+  num_instructions_total : nat;
+  // Total number of query calls.
+  num_calls_total : nat;
+  // Total number of payload bytes use for query call requests.
+  request_payload_bytes_total : nat;
+};
+type ReadFileChunkInput = record {
+  generation : nat64;
+  index : nat32;
+  file_id : nat32;
+};
+type ReadFileRangeInput = record {
+  generation : nat64;
+  offset : nat64;
+  length : nat64;
+  file_id : nat32;
+};
+type ReaderGrant = record {
+  status : ReaderGrantStatus;
+  subject : principal;
+  updated_at_ms : nat64;
+  granted_by : principal;
+  entitlement_version : nat64;
+  expires_at_ms : opt nat64;
+};
+type ReaderGrantError = variant {
+  InvalidExpiry;
+  InvalidInput : text;
+  AnonymousNotAllowed;
+  VersionConflict : record { current_version : nat64 };
+  StaleVersion : record { current_version : nat64 };
+  TooManyItems : record { max : nat16 };
+  Unauthorized;
+};
+type ReaderGrantSpec = record {
+  subject : principal;
+  entitlement_version : nat64;
+  expires_at_ms : opt nat64;
+};
+type ReaderGrantStatus = variant { Active; Revoked };
+type ReaderPolicy = record {
+  allow_by_hash : bool;
+  enabled : bool;
+  authority : opt principal;
+};
+type RenewUploadOutput = record { expires_at : nat64 };
+type ReplaceFileInput = record { id : nat32; expected_revision : nat64 };
+type Result = variant { Ok : bool; Err : SyncError };
+type Result_1 = variant { Ok; Err : text };
+type Result_10 = variant { Ok : BatchEnsureFoldersOutput; Err : SyncError };
+type Result_11 = variant { Ok : BeginUploadOutput; Err : SyncError };
+type Result_12 = variant { Ok : CollectGarbageOutput; Err : SyncError };
+type Result_13 = variant { Ok : CommitUploadOutput; Err : SyncError };
+type Result_14 = variant { Ok : CreateFileOutput; Err : text };
+type Result_15 = variant { Ok : bool; Err : text };
+type Result_16 = variant { Ok : BucketInfo; Err : text };
+type Result_17 = variant { Ok : CanisterStatusResult; Err : text };
+type Result_18 = variant { Ok : DirectoryStorageHealth; Err : SyncError };
+type Result_19 = variant { Ok : opt EntryInfoV2; Err : SyncError };
+type Result_2 = variant { Ok : ReaderGrant; Err : ReaderGrantError };
+type Result_20 = variant { Ok : vec FolderName; Err : text };
+type Result_21 = variant { Ok : vec record { nat32; blob }; Err : text };
+type Result_22 = variant { Ok : FileDescriptor; Err : text };
+type Result_23 = variant { Ok : FileInfo; Err : text };
+type Result_24 = variant { Ok : FolderInfo; Err : text };
+type Result_25 = variant { Ok : GcHealth; Err : SyncError };
+type Result_26 = variant { Ok : opt ReaderGrant; Err : ReaderGrantError };
+type Result_27 = variant { Ok : BucketStorageMetrics; Err : text };
+type Result_28 = variant { Ok : SubtreeManifestOutput; Err : SyncError };
+type Result_29 = variant { Ok : UploadHealth; Err : SyncError };
+type Result_3 = variant {
+  Ok : BatchUpsertReaderGrantsOutput;
+  Err : ReaderGrantError;
+};
+type Result_30 = variant { Ok : UploadStatusOutput; Err : SyncError };
+type Result_31 = variant { Ok : ListEntriesOutput; Err : SyncError };
+type Result_32 = variant { Ok : vec FileInfo; Err : text };
+type Result_33 = variant { Ok : vec FolderInfo; Err : text };
+type Result_34 = variant { Ok : UpdateFileOutput; Err : text };
+type Result_35 = variant { Ok : OAuthBeginOutput; Err : text };
+type Result_36 = variant { Ok : OAuthCompleteOutput; Err : text };
+type Result_37 = variant { Ok : blob; Err : text };
+type Result_38 = variant { Ok : RenewUploadOutput; Err : SyncError };
+type Result_39 = variant { Ok : UpdateFileChunkOutput; Err : text };
+type Result_4 = variant { Ok : OAuthAccount; Err : text };
+type Result_40 = variant { Ok : UploadChunkOutput; Err : SyncError };
+type Result_41 = variant { Ok : text; Err : text };
+type Result_5 = variant { Ok : TransferCyclesOutput; Err : text };
+type Result_6 = variant { Ok : CreateFileOutput; Err : SyncError };
+type Result_7 = variant { Ok : BatchCreateSmallFilesOutput; Err : SyncError };
+type Result_8 = variant { Ok : vec nat32; Err : text };
+type Result_9 = variant { Ok : EnsureFolderOutput; Err : SyncError };
+type RevokeReaderGrantInput = record {
+  request_id : blob;
+  subject : principal;
+  entitlement_version : nat64;
+};
+type SubtreeManifestCursor = record {
+  stack : vec ManifestFrame;
+  revision : nat64;
+};
+type SubtreeManifestInput = record {
+  cursor : opt SubtreeManifestCursor;
+  root : nat32;
+  take : opt nat16;
+};
+type SubtreeManifestOutput = record {
+  next : opt SubtreeManifestCursor;
+  entries : vec ManifestEntry;
+  revision : nat64;
+};
+type SyncError = variant {
+  Internal : text;
+  InvalidInput : text;
+  NotFound : text;
+  PermissionDenied : text;
+  Unauthorized : text;
+  LimitExceeded : text;
+  Conflict : record { entries : vec EntryRef; message : text };
+};
+type TransferCyclesInput = record { to_canister : principal; amount : nat };
+type TransferCyclesOutput = record {
+  transferred : nat;
+  remaining_balance : nat;
+};
+type UpdateBucketInput = record {
+  status : opt int8;
+  reader_policy : opt ReaderPolicy;
+  trusted_eddsa_pub_keys : opt vec blob;
+  name : opt text;
+  max_custom_data_size : opt nat16;
+  http_read_mode : opt HttpReadMode;
+  max_children : opt nat16;
+  enable_hash_index : opt bool;
+  max_file_size : opt nat64;
+  visibility : opt nat8;
+  max_folder_depth : opt nat8;
+  trusted_ecdsa_pub_keys : opt vec blob;
+};
+type UpdateFileChunkInput = record {
+  id : nat32;
+  chunk_index : nat32;
+  content : blob;
+};
+type UpdateFileChunkOutput = record { updated_at : nat64; filled : nat64 };
+type UpdateFileInput = record {
+  id : nat32;
+  status : opt int8;
+  custom : opt vec record { text; MetadataValue };
+  hash : opt blob;
+  name : opt text;
+  size : opt nat64;
+  content_type : opt text;
+};
+type UpdateFileOutput = record { updated_at : nat64 };
+type UpdateFolderInput = record {
+  id : nat32;
+  status : opt int8;
+  name : opt text;
+};
+type UpgradeArgs = record {
+  governance_canister : opt principal;
+  max_custom_data_size : opt nat16;
+  max_children : opt nat16;
+  enable_hash_index : opt bool;
+  max_file_size : opt nat64;
+  max_folder_depth : opt nat8;
+};
+type UploadChunkInput = record {
+  request_id : blob;
+  chunk_index : nat32;
+  content : blob;
+  session_id : blob;
+};
+type UploadChunkOutput = record {
+  filled : nat64;
+  expires_at : nat64;
+  uploaded_chunks : nat32;
+};
+type UploadHealth = record {
+  active_sessions : nat64;
+  max_active_sessions : nat16;
+};
+type UploadStatusOutput = record {
+  total_chunks : nat32;
+  next : opt nat32;
+  size : nat64;
+  generation : nat64;
+  filled : nat64;
+  ranges : vec UploadedChunkRange;
+  expires_at : nat64;
+  uploaded_chunks : nat32;
+  file_id : nat32;
+};
+type UploadedChunkRange = record {
+  // Inclusive last chunk index.
+  end : nat32;
+  // Inclusive first chunk index.
+  start : nat32;
+};
+type UpsertReaderGrantInput = record {
+  request_id : blob;
+  subject : principal;
+  entitlement_version : nat64;
+  expires_at_ms : opt nat64;
+};
+service : (opt CanisterArgs) -> {
+  abort_upload : (AbortUploadInput, opt blob) -> (Result);
+  admin_add_auditors : (vec principal) -> (Result_1);
+  admin_add_managers : (vec principal) -> (Result_1);
+  admin_batch_upsert_reader_grants : (BatchUpsertReaderGrantsInput) -> (
+      Result_3,
+    );
+  admin_list_oauth_accounts : () -> (vec OAuthAccount) query;
+  admin_migrate_directory_storage : (MigrateDirectoryStorageInput) -> (
+      MigrateDirectoryStorageOutput,
+    );
+  admin_remove_auditors : (vec principal) -> (Result_1);
+  admin_remove_managers : (vec principal) -> (Result_1);
+  admin_retry_directory_migration : () -> (MigrateDirectoryStorageOutput);
+  admin_review_oauth_account : (OAuthReviewInput) -> (Result_4);
+  admin_revoke_reader_grant : (RevokeReaderGrantInput) -> (Result_2);
+  admin_set_auditors : (vec principal) -> (Result_1);
+  admin_set_custom_domains : (vec text) -> (Result_1);
+  admin_set_governance_canister : (opt principal) -> (Result_1);
+  admin_set_managers : (vec principal) -> (Result_1);
+  admin_set_oauth_config : (OAuthConfigInput) -> (Result_1);
+  admin_set_reader_authority : (opt principal) -> (Result_1);
+  admin_transfer_cycles : (TransferCyclesInput) -> (Result_5);
+  admin_update_bucket : (UpdateBucketInput) -> (Result_1);
+  admin_upsert_reader_grant : (UpsertReaderGrantInput) -> (Result_2);
+  api_version : () -> (nat16) query;
+  batch_create_small_files : (BatchCreateSmallFilesInput, opt blob) -> (
+      Result_7,
+    );
+  batch_delete_subfiles : (nat32, vec nat32, opt blob) -> (Result_8);
+  batch_ensure_folders : (BatchEnsureFoldersInput, opt blob) -> (Result_10);
+  begin_upload : (BeginUploadInput, opt blob) -> (Result_11);
+  collect_garbage : (CollectGarbageInput, opt blob) -> (Result_12);
+  commit_upload : (AbortUploadInput, opt blob) -> (Result_13);
+  create_file : (CreateFileInput, opt blob) -> (Result_14);
+  create_folder : (CreateFolderInput, opt blob) -> (Result_14);
+  delete_entry_if : (DeleteEntryIfInput, opt blob) -> (Result);
+  delete_file : (nat32, opt blob) -> (Result_15);
+  delete_folder : (nat32, opt blob) -> (Result_15);
+  ensure_folder : (EnsureFolderInput, opt blob) -> (Result_9);
+  get_bucket_info : (opt blob) -> (Result_16) query;
+  get_canister_status : () -> (Result_17);
+  get_capabilities : () -> (BucketCapabilities) query;
+  get_directory_storage_health : (opt blob) -> (Result_18) query;
+  get_domain_config : () -> (DomainConfig) query;
+  get_entry : (GetEntryInput, opt blob) -> (Result_19) query;
+  get_file_ancestors : (nat32, opt blob) -> (Result_20) query;
+  get_file_chunks : (nat32, nat32, opt nat32, opt blob) -> (Result_21) query;
+  // Returns the media-safe immutable description of a fully committed file.
+  // Reader grants are sufficient for this endpoint, but do not expose any
+  // directory metadata.
+  get_file_descriptor : (nat32, opt blob) -> (Result_22) query;
+  get_file_info : (nat32, opt blob) -> (Result_23) query;
+  get_file_info_by_hash : (blob, opt blob) -> (Result_23) query;
+  get_folder_ancestors : (nat32, opt blob) -> (Result_20) query;
+  get_folder_info : (nat32, opt blob) -> (Result_24) query;
+  get_gc_health : (opt blob) -> (Result_25) query;
+  get_my_reader_grant : () -> (Result_26) query;
+  get_oauth_config : () -> (OAuthPublicConfig) query;
+  // Returns the storage-only subset of canister status and accepts the same
+  // delegated access token as directory reads. The legacy full status endpoint
+  // remains unchanged for existing clients.
+  get_storage_metrics : (opt blob) -> (Result_27);
+  get_subtree_manifest : (SubtreeManifestInput, opt blob) -> (Result_28) query;
+  get_upload_health : (opt blob) -> (Result_29) query;
+  get_upload_status : (GetUploadStatusInput, opt blob) -> (Result_30) query;
+  is_caller_controller : () -> (bool) query;
+  list_entries : (ListEntriesInput, opt blob) -> (Result_31) query;
+  list_files : (nat32, opt nat32, opt nat32, opt blob) -> (Result_32) query;
+  list_folders : (nat32, opt nat32, opt nat32, opt blob) -> (Result_33) query;
+  move_file : (MoveInput, opt blob) -> (Result_34);
+  move_folder : (MoveInput, opt blob) -> (Result_34);
+  oauth_begin : (OAuthBeginInput) -> (Result_35);
+  oauth_complete : (OAuthCompleteInput) -> (Result_36);
+  // Reads exactly one chunk from an expected immutable file generation.
+  read_file_chunk : (ReadFileChunkInput, opt blob) -> (Result_37) query;
+  // Reads a bounded byte range from an expected immutable file generation.
+  read_file_range : (ReadFileRangeInput, opt blob) -> (Result_37) query;
+  renew_upload : (AbortUploadInput, opt blob) -> (Result_38);
+  update_file_chunk : (UpdateFileChunkInput, opt blob) -> (Result_39);
+  update_file_info : (UpdateFileInput, opt blob) -> (Result_34);
+  update_folder_info : (UpdateFolderInput, opt blob) -> (Result_34);
+  upload_chunk : (UploadChunkInput, opt blob) -> (Result_40);
+  validate2_admin_set_auditors : (vec principal) -> (Result_41);
+  validate2_admin_set_custom_domains : (vec text) -> (Result_41);
+  validate2_admin_set_managers : (vec principal) -> (Result_41);
+  validate2_admin_update_bucket : (UpdateBucketInput) -> (Result_41);
+  validate_admin_add_auditors : (vec principal) -> (Result_41);
+  validate_admin_add_managers : (vec principal) -> (Result_41);
+  validate_admin_remove_auditors : (vec principal) -> (Result_41);
+  validate_admin_remove_managers : (vec principal) -> (Result_41);
+  validate_admin_set_auditors : (vec principal) -> (Result_1);
+  validate_admin_set_custom_domains : (vec text) -> (Result_1);
+  validate_admin_set_managers : (vec principal) -> (Result_1);
+  validate_admin_update_bucket : (UpdateBucketInput) -> (Result_1);
+}

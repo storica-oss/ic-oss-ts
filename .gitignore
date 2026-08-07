@@ -1,0 +1,10 @@
+/node_modules/
+/dist/
+/.dfx/
+/coverage/
+.env
+*.pem
+*.cose
+.DS_Store
+examples/upload/node_modules/
+examples/upload/storica-example-identity.json

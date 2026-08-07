@@ -1,0 +1,706 @@
+type ApiAppendGalleryImagesInput = record {
+  content_id : nat64;
+  asset_ids : vec nat64;
+};
+type ApiBeginImageUploadInput = record {
+  request_id : blob;
+  hash : opt blob;
+  name : text;
+  size : nat64;
+  content_type : text;
+};
+type ApiCreateContentInput = record {
+  title : text;
+  // Article bodies accept Markdown. Gallery and video bodies remain descriptions.
+  body : text;
+  kind : ContentKind;
+  slug : text;
+  tags : vec text;
+  cover_asset_id : opt nat64;
+  summary : text;
+  // Publish immediately after all existing media integrity checks pass.
+  publish : bool;
+  // Assets must already be registered in this Hub and match the visibility class.
+  asset_ids : vec nat64;
+  visibility : ContentVisibility;
+};
+type ApiFinishImageUploadInput = record {
+  request_id : blob;
+  session_id : blob;
+  bucket : principal;
+};
+type ApiGallerySummary = record {
+  id : nat64;
+  status : ContentStatus;
+  title : text;
+  slug : text;
+  updated_at_ms : nat64;
+  asset_count : nat64;
+};
+type ApiImageUploadSession = record {
+  total_chunks : nat32;
+  session_id : blob;
+  bucket : principal;
+  chunk_size : nat32;
+  expires_at : nat64;
+  file_id : nat32;
+};
+type ApiKeyCreated = record {
+  // Returned once. Only its SHA3-256 digest is retained by the Hub.
+  token : text;
+  api_key : ApiKeySummary;
+};
+type ApiKeySummary = record {
+  id : nat64;
+  last_used_at_ms : opt nat64;
+  name : text;
+  created_at_ms : nat64;
+  prefix : text;
+  revoked_at_ms : opt nat64;
+  expires_at_ms : nat64;
+};
+type ApiUploadImageChunkInput = record {
+  request_id : blob;
+  chunk_index : nat32;
+  content : blob;
+  session_id : blob;
+  bucket : principal;
+};
+type ApiUploadImageChunkOutput = record {
+  filled : nat64;
+  expires_at : nat64;
+  uploaded_chunks : nat32;
+};
+type Asset = record {
+  id : nat64;
+  hash : opt blob;
+  class : BucketClass;
+  size : nat64;
+  generation : nat64;
+  content_type : text;
+  bucket : principal;
+  file_id : nat32;
+};
+type AuthorProfile = record {
+  bio : text;
+  "principal" : principal;
+  active : bool;
+  display_name : text;
+};
+type BucketClass = variant { Protected; Public };
+type BucketRegistration = record {
+  status : BucketStatus;
+  class : BucketClass;
+  label : text;
+  canister : principal;
+};
+type BucketStatus = variant { Draining; Active; Offline; Provisioning };
+type CallerPermissions = record {
+  can_manage : bool;
+  active_author : bool;
+  can_edit : bool;
+};
+type Comment = record {
+  id : nat64;
+  body : text;
+  content_id : nat64;
+  hidden : bool;
+  author : principal;
+  created_at_ms : nat64;
+  parent_id : opt nat64;
+};
+type CommentPage = record { next_cursor : opt nat64; comments : vec Comment };
+type Content = record {
+  id : nat64;
+  status : ContentStatus;
+  title : text;
+  body : text;
+  kind : ContentKind;
+  assets : vec nat64;
+  slug : text;
+  tags : vec text;
+  curation_weight : int16;
+  updated_at_ms : nat64;
+  cover_asset_id : opt nat64;
+  published_at_ms : opt nat64;
+  summary : text;
+  visibility : ContentVisibility;
+  contributors : vec principal;
+};
+type ContentKind = variant { Article; Gallery; Video };
+type ContentStatus = variant { Draft; Archived; Published };
+type ContentVisibility = variant { PrivateLibrary; Public; OwnerOnly };
+type CreateCommentInput = record {
+  body : text;
+  content_id : nat64;
+  parent_id : opt nat64;
+};
+type CreateContentInput = record {
+  title : text;
+  body : text;
+  // Optional fields preserve wire compatibility with pre-metadata clients.
+  kind : opt ContentKind;
+  slug : text;
+  tags : opt vec text;
+  cover_asset_id : opt nat64;
+  summary : opt text;
+  visibility : ContentVisibility;
+  contributors : vec principal;
+};
+type CreatePaymentIntentInput = record {
+  product_id : nat64;
+  idempotency_key : text;
+};
+type CreatePayoutInput = record {
+  author : principal;
+  amount_e8s : nat64;
+  idempotency_key : text;
+};
+type CreateTranscodeJobInput = record {
+  source_retention : opt SourceRetentionPolicy;
+  source_asset_id : nat64;
+  variants : vec MediaVariantSpec;
+  worker : principal;
+  idempotency_key : text;
+};
+type CyclesStatus = record { cycles : nat; measured_at_ms : nat64 };
+type Entitlement = record {
+  status : EntitlementStatus;
+  subject : principal;
+  version : nat64;
+  expires_at_ms : opt nat64;
+};
+type EntitlementStatus = variant {
+  Revoking;
+  Active;
+  Provisioning;
+  Revoked;
+  Expired;
+};
+type FinancialLedgerEntry = variant {
+  Payout : Payout;
+  Refund : Refund;
+  Purchase : Purchase;
+};
+type FinancialLedgerPage = record {
+  entries : vec FinancialLedgerEntry;
+  next_cursor : opt nat64;
+};
+type FrontendOriginConfig = record {
+  // Other origins owned by this deployment that may request the canonical
+  // derivation origin. Internet Identity caps this list at ten entries.
+  alternative_origins : vec text;
+  // Domains served through the ICP custom-domain gateway and exposed by
+  // `/.well-known/ic-domains`.
+  custom_domains : vec text;
+  // Stable II principal derivation origin. Once real users exist, changing
+  // this value changes their principals and must be treated as a migration.
+  canonical_origin : opt text;
+};
+type GrantDelivery = record {
+  last_error : opt text;
+  status : GrantDeliveryStatus;
+  subject : principal;
+  updated_at_ms : nat64;
+  operation : GrantDeliveryOperation;
+  bucket : principal;
+  entitlement_version : nat64;
+};
+type GrantDeliveryOperation = variant { Revoke; Upsert };
+type GrantDeliveryStatus = variant { Applied; Failed; Pending };
+type HttpRequest = record {
+  url : text;
+  method : text;
+  body : blob;
+  headers : vec record { text; text };
+};
+type HttpResponse = record {
+  body : blob;
+  headers : vec record { text; text };
+  upgrade : opt bool;
+  streaming_strategy : opt StreamingStrategy;
+  status_code : nat16;
+};
+type InitArgs = record { site_name : text };
+type MediaStreamManifest = record {
+  initialization : VerifiedMediaRange;
+  segments : vec VerifiedMediaRange;
+  content_type : text;
+  asset_id : nat64;
+  duration_ms : nat64;
+};
+type MediaVariant = record {
+  last_error : opt text;
+  status : MediaVariantStatus;
+  content_hash : opt blob;
+  spec : MediaVariantSpec;
+  asset_id : opt nat64;
+  candidate : opt MediaVariantCandidate;
+  verification : opt MediaVariantVerification;
+  submission : opt MediaVariantSubmission;
+};
+type MediaVariantCandidate = record {
+  submitted_at_ms : nat64;
+  content_hash : blob;
+  size : nat64;
+  generation : nat64;
+  content_type : text;
+  bucket : principal;
+  submitted_by : principal;
+  file_id : nat32;
+};
+type MediaVariantKind = variant {
+  Poster;
+  Thumbnail;
+  Transcode : record { profile : text };
+};
+type MediaVariantSpec = record {
+  height : opt nat32;
+  kind : MediaVariantKind;
+  codec : text;
+  content_type : text;
+  label : text;
+  width : opt nat32;
+  bitrate_bps : opt nat64;
+};
+type MediaVariantStatus = variant { Failed; Ready; Verifying; Pending };
+type MediaVariantSubmission = record {
+  attempt : nat16;
+  bucket : principal;
+  file_id : nat32;
+};
+type MediaVariantVerification = record {
+  height : opt nat32;
+  codec : text;
+  content_hash : blob;
+  generation : nat64;
+  verified_at_ms : nat64;
+  verified_by : principal;
+  width : opt nat32;
+  bitrate_bps : opt nat64;
+  bucket : principal;
+  file_id : nat32;
+};
+type MembershipProduct = record {
+  id : nat64;
+  active : bool;
+  name : text;
+  price_e8s : nat64;
+  duration_ms : opt nat64;
+};
+type OperationalState = record {
+  writes_enabled : bool;
+  protected_reads_enabled : bool;
+  updated_at_ms : nat64;
+  purchases_enabled : bool;
+  version : nat64;
+  reason : text;
+};
+type PaymentIntent = record {
+  id : nat64;
+  status : PaymentStatus;
+  product_id : nat64;
+  // Product duration is snapshotted; changing a product cannot alter an
+  // already-created payment intent.
+  entitlement_duration_ms : opt nat64;
+  ledger_block : opt nat64;
+  amount_e8s : nat64;
+  // Fixed at creation so retries are ICRC-2 idempotent, including after a
+  // call timeout where the ledger outcome is unknown.
+  transfer_created_at_time : nat64;
+  buyer : principal;
+  expires_at_ms : nat64;
+  idempotency_key : text;
+};
+type PaymentReconciliationReport = record {
+  scanned : nat16;
+  matched : nat16;
+  expired_without_transfer : nat16;
+  log_length : nat64;
+  next_cursor : nat64;
+};
+type PaymentStatus = variant {
+  Failed;
+  Paid;
+  ReconcileRequired;
+  Processing;
+  Pending;
+};
+type Payout = record {
+  id : nat64;
+  status : PayoutStatus;
+  ledger_block : opt nat64;
+  author : principal;
+  amount_e8s : nat64;
+  // Ledger fee fixed before the first transfer attempt. `None` only exists
+  // for legacy or manually confirmed records whose fee is unknown.
+  ledger_fee_e8s : opt nat64;
+  ledger : opt principal;
+  transfer_created_at_time : nat64;
+  idempotency_key : text;
+};
+type PayoutStatus = variant { Failed; Confirmed; Submitted; Pending };
+type Purchase = record {
+  id : nat64;
+  product_id : nat64;
+  // Revenue cannot be reserved for payout before this timestamp. Existing
+  // pre-hold-period purchases decode as immediately available.
+  available_at_ms : nat64;
+  rule_version : nat64;
+  ledger_block : opt nat64;
+  created_at_ms : nat64;
+  amount_e8s : nat64;
+  payment_intent_id : opt nat64;
+  // Immutable settlement provenance. Legacy/manual records decode as None
+  // and are reported as unverifiable by the production audit tool.
+  ledger : opt principal;
+  transfer_created_at_time : opt nat64;
+  allocations : vec RevenueAllocation;
+  buyer : principal;
+};
+type Refund = record {
+  id : nat64;
+  status : RefundStatus;
+  ledger_block : opt nat64;
+  purchase_id : nat64;
+  amount_e8s : nat64;
+  // Ledger fee fixed before the first transfer attempt.
+  ledger_fee_e8s : opt nat64;
+  ledger : opt principal;
+  transfer_created_at_time : nat64;
+  buyer : principal;
+  idempotency_key : text;
+  // Original revenue recipients are debited using the immutable Purchase
+  // allocation proportions. Any integer remainder belongs to treasury.
+  allocation_reversals : vec RevenueAllocation;
+};
+type RefundStatus = variant { Confirmed; Requested; Cancelled; Submitted };
+type RegisterAssetInput = record {
+  hash : opt blob;
+  size : nat64;
+  generation : nat64;
+  content_type : text;
+  bucket : principal;
+  file_id : nat32;
+};
+type Result = variant { Ok : Refund; Err : text };
+type Result_1 = variant { Ok : TranscodeJob; Err : text };
+type Result_10 = variant { Ok : vec AuthorProfile; Err : text };
+type Result_11 = variant { Ok : vec MembershipProduct; Err : text };
+type Result_12 = variant { Ok : vec OperationalState; Err : text };
+type Result_13 = variant { Ok : TranscodeJobPage; Err : text };
+type Result_14 = variant { Ok : PaymentIntent; Err : text };
+type Result_15 = variant { Ok : Entitlement; Err : text };
+type Result_16 = variant { Ok : PaymentReconciliationReport; Err : text };
+type Result_17 = variant { Ok : TreasuryReconciliation; Err : text };
+type Result_18 = variant { Ok : Purchase; Err : text };
+type Result_19 = variant { Ok; Err : text };
+type Result_2 = variant { Ok : Asset; Err : text };
+type Result_20 = variant { Ok : Content; Err : text };
+type Result_21 = variant { Ok : ApiKeySummary; Err : text };
+type Result_22 = variant { Ok : Comment; Err : text };
+type Result_23 = variant { Ok : FrontendOriginConfig; Err : text };
+type Result_24 = variant { Ok : MediaStreamManifest; Err : text };
+type Result_25 = variant { Ok : OperationalState; Err : text };
+type Result_26 = variant { Ok : RevenueShareRule; Err : text };
+type Result_27 = variant { Ok : SiteConfig; Err : text };
+type Result_28 = variant { Ok : bool; Err : text };
+type Result_29 = variant { Ok : ApiImageUploadSession; Err : text };
+type Result_3 = variant { Ok : Payout; Err : text };
+type Result_30 = variant { Ok : vec ApiGallerySummary; Err : text };
+type Result_31 = variant { Ok : ApiUploadImageChunkOutput; Err : text };
+type Result_32 = variant { Ok : RegisterAssetInput; Err : text };
+type Result_33 = variant { Ok : CommentPage; Err : text };
+type Result_4 = variant { Ok : ApiKeyCreated; Err : text };
+type Result_5 = variant { Ok : vec Result_3; Err : text };
+type Result_6 = variant { Ok : FinancialLedgerPage; Err : text };
+type Result_7 = variant { Ok : CyclesStatus; Err : text };
+type Result_8 = variant { Ok : opt RevenueShareRule; Err : text };
+type Result_9 = variant { Ok : vec ApiKeySummary; Err : text };
+type RevenueAllocation = record { recipient : principal; amount_e8s : nat64 };
+type RevenueBalance = record {
+  accrued_e8s : nat64;
+  reserved_e8s : nat64;
+  available_e8s : nat64;
+  pending_e8s : nat64;
+  debt_e8s : nat64;
+};
+type RevenueConfigurationInput = record {
+  rule : RevenueShareRule;
+  hold_ms : nat64;
+};
+type RevenueShareRule = record {
+  treasury_bps : nat16;
+  author_bps : vec record { principal; nat16 };
+  version : nat64;
+};
+type SetOperationalStateInput = record {
+  writes_enabled : bool;
+  protected_reads_enabled : bool;
+  purchases_enabled : bool;
+  reason : text;
+};
+type SiteConfig = record {
+  owner : principal;
+  site_name : text;
+  schema_version : nat16;
+};
+type SourceRetentionPolicy = variant { AllowOriginalDownload; RetainOwnerOnly };
+type StorageLayoutStatus = record {
+  active_generation : nat8;
+  // Records currently persisted across the active checkpoint and all
+  // write-through maps. Heap-only collections join the next checkpoint.
+  persisted_record_count : nat64;
+  layout_version : nat16;
+  format : text;
+};
+type StreamingCallbackHttpResponse = record {
+  token : opt StreamingCallbackToken;
+  body : blob;
+};
+// Retained in the response type so `http_request` remains wire-compatible
+// with the IC HTTP interface even though the embedded UI is currently small
+// enough to return in one response.
+type StreamingCallbackToken = record { token : blob };
+type StreamingStrategy = variant {
+  Callback : record {
+    token : StreamingCallbackToken;
+    callback : func (StreamingCallbackToken) -> (
+        StreamingCallbackHttpResponse,
+      ) query;
+  };
+};
+type SubmitTranscodeOutputInput = record {
+  label : text;
+  bucket : principal;
+  file_id : nat32;
+};
+type TranscodeJob = record {
+  id : nat64;
+  source_generation : nat64;
+  last_error : opt text;
+  status : TranscodeJobStatus;
+  source_retention : SourceRetentionPolicy;
+  source_asset_id : nat64;
+  attempts : nat16;
+  security : BucketClass;
+  updated_at_ms : nat64;
+  variants : vec MediaVariant;
+  created_at_ms : nat64;
+  source_hash : blob;
+  source_size : nat64;
+  worker : principal;
+  idempotency_key : text;
+};
+type TranscodeJobPage = record {
+  jobs : vec TranscodeJob;
+  next_cursor : opt nat64;
+};
+type TranscodeJobStatus = variant {
+  Queued;
+  Failed;
+  Ready;
+  Running;
+  AwaitingVerification;
+  Cancelled;
+};
+type TreasuryReconciliation = record {
+  confirmed_ledger_fees_e8s : nat64;
+  ledger_balance_e8s : nat64;
+  confirmed_refunds_e8s : nat64;
+  unresolved_fee_records : nat64;
+  shortfall_e8s : nat64;
+  pending_payouts_e8s : nat64;
+  pending_refunds_e8s : nat64;
+  surplus_e8s : nat64;
+  book_balance_e8s : nat64;
+  gross_purchases_e8s : nat64;
+  confirmed_payouts_e8s : nat64;
+};
+type UpdateContentSettingsInput = record {
+  kind : ContentKind;
+  tags : vec text;
+  curation_weight : opt int16;
+  cover_asset_id : opt nat64;
+  // Optional so clients compiled before curation metadata remain accepted.
+  summary : opt text;
+  visibility : ContentVisibility;
+};
+type VerifiedMediaRange = record {
+  start_time_ms : nat64;
+  hash : blob;
+  size : nat64;
+  offset : nat64;
+  duration_ms : nat64;
+};
+type VerifyTranscodeOutputInput = record {
+  height : opt nat32;
+  codec : text;
+  content_hash : blob;
+  generation : nat64;
+  label : text;
+  width : opt nat32;
+  bitrate_bps : opt nat64;
+  bucket : principal;
+  file_id : nat32;
+};
+service : (InitArgs) -> {
+  admin_cancel_refund : (nat64) -> (Result);
+  admin_cancel_transcode_job : (nat64) -> (Result_1);
+  // Commits an Asset only after reading its immutable descriptor from the
+  // registered Bucket.  The Hub must be configured as a Bucket Manager (or use
+  // an equivalent service identity); browser-supplied size/hash/generation are
+  // never trusted on this path.
+  admin_commit_bucket_asset : (principal, nat32) -> (Result_2);
+  admin_confirm_payout : (nat64, nat64) -> (Result_3);
+  admin_create_api_key : (text, nat64) -> (Result_4);
+  admin_create_payout : (principal, nat64, text) -> (Result_3);
+  // Reserves multiple author payouts in one update. Validation is independent
+  // per entry, so an invalid or over-limit author does not roll back successful
+  // reservations for other authors.
+  admin_create_payout_batch : (vec CreatePayoutInput) -> (Result_5);
+  admin_create_refund : (nat64, nat64, text) -> (Result);
+  admin_create_transcode_job : (CreateTranscodeJobInput) -> (Result_1);
+  // Sends an approved payout from the Hub treasury through ICRC-1. A call that
+  // loses its response remains Submitted; retrying reuses its immutable memo and
+  // timestamp, so the ledger returns Duplicate with the original block instead
+  // of sending the author a second payment.
+  admin_execute_payout : (nat64) -> (Result_3);
+  // Executes up to 20 reserved payouts sequentially. Each result is retained
+  // independently, making the operation safe to retry with the same payout IDs.
+  admin_execute_payout_batch : (vec nat64) -> (Result_5);
+  // Returns funds from the Hub treasury to the original Purchase buyer. Lost
+  // responses are retried with the same memo and timestamp, so an ICRC ledger
+  // resolves the transfer as Duplicate instead of paying twice.
+  admin_execute_refund : (nat64) -> (Result);
+  // Exports an immutable, globally ordered financial audit page. The cursor is
+  // the last seen global record ID; at most 500 entries are returned per call.
+  admin_export_financial_ledger : (opt nat64, nat16) -> (Result_6) query;
+  admin_get_cycles_status : () -> (Result_7) query;
+  admin_get_revenue_share_rule : () -> (Result_8) query;
+  admin_list_api_keys : () -> (Result_9) query;
+  admin_list_authors : () -> (Result_10) query;
+  admin_list_membership_products : () -> (Result_11) query;
+  admin_list_operational_events : () -> (Result_12) query;
+  admin_list_transcode_jobs : (opt nat64, nat16) -> (Result_13) query;
+  admin_mark_payment_paid : (nat64, nat64) -> (Result_14);
+  admin_mark_payout_submitted : (nat64, nat64) -> (Result_3);
+  // Synchronizes a versioned Reader Grant to every active Protected Bucket.
+  // The Hub must be configured as each Bucket's reader authority before this is
+  // called.  A failed Bucket keeps the entitlement in Provisioning for retry.
+  admin_provision_entitlement : (principal, opt nat64) -> (Result_15);
+  admin_reconcile_payments : (nat16) -> (Result_16);
+  // Compares the Hub's internal purchase/refund/payout book with its default
+  // ICRC-1 treasury account. The cross-canister observation is not an atomic
+  // ledger snapshot, so callers should retry if payments are actively settling.
+  admin_reconcile_treasury : () -> (Result_17);
+  admin_record_purchase : (principal, nat64, nat64) -> (Result_18);
+  admin_register_asset : (RegisterAssetInput) -> (Result_2);
+  admin_register_bucket : (BucketRegistration) -> (Result_19);
+  admin_reorder_content_assets : (nat64, vec nat64) -> (Result_20);
+  admin_revoke_api_key : (nat64) -> (Result_21);
+  // Revokes a member without requiring a financial refund. Uses the same
+  // versioned per-Bucket Saga as refund revocation, so stale grants cannot
+  // overwrite the tombstone and partial delivery remains retryable.
+  admin_revoke_entitlement : (principal) -> (Result_15);
+  admin_set_comment_hidden : (nat64, bool) -> (Result_22);
+  admin_set_frontend_origin_config : (FrontendOriginConfig) -> (Result_23);
+  admin_set_media_manifest : (MediaStreamManifest) -> (Result_24);
+  admin_set_operational_state : (SetOperationalStateInput) -> (Result_25);
+  // Enables ICRC-2 collection into this Hub's default ICRC account. The Hub
+  // principal is deliberately the treasury owner, so revenue is never routed
+  // through a browser or a mutable external destination.
+  admin_set_payment_ledger : (opt principal) -> (Result_19);
+  // Atomically updates the revenue rule and refund hold used by future
+  // Purchases, preventing a browser or network interruption from leaving a
+  // half-applied financial configuration.
+  admin_set_revenue_configuration : (RevenueConfigurationInput) -> (Result_26);
+  // Configures how long newly collected revenue remains unavailable for author
+  // payout. A non-zero hold leaves room for refund review before funds leave the
+  // Hub treasury. The current value is snapshotted into every Purchase.
+  admin_set_revenue_hold_ms : (nat64) -> (Result_19);
+  admin_set_revenue_share_rule : (RevenueShareRule) -> (Result_26);
+  admin_set_test_entitlement : (principal, opt nat64) -> (Result_15);
+  admin_transfer_ownership : (principal) -> (Result_27);
+  admin_update_content_settings : (nat64, UpdateContentSettingsInput) -> (
+      Result_20,
+    );
+  admin_upsert_author : (AuthorProfile) -> (Result_19);
+  admin_upsert_membership_product : (MembershipProduct) -> (Result_19);
+  admin_verify_transcode_output : (nat64, VerifyTranscodeOutputInput) -> (
+      Result_1,
+    );
+  api_abort_image_upload : (text, ApiFinishImageUploadInput) -> (Result_28);
+  api_abort_media_upload : (text, ApiFinishImageUploadInput) -> (Result_28);
+  // Adds uploaded images to an existing Public gallery. Published galleries
+  // remain published after the same media-integrity checks succeed.
+  api_append_gallery_images : (text, ApiAppendGalleryImagesInput) -> (
+      Result_20,
+    );
+  // Starts an image-only Hub-managed upload in the active Public Bucket.
+  api_begin_image_upload : (text, ApiBeginImageUploadInput) -> (Result_29);
+  // Starts a Hub-managed image or MP4 upload. The API Key never grants direct
+  // Bucket authority; the Hub remains the only Bucket caller.
+  api_begin_media_upload : (text, ApiBeginImageUploadInput) -> (Result_29);
+  // Bearer-token content ingestion for integrations. Assets must already exist
+  // in this Hub; publishing reuses the same media and storage-class checks as
+  // the owner-facing workflow.
+  api_create_content : (text, ApiCreateContentInput) -> (Result_20);
+  // Commits an image upload and records its immutable descriptor as a Public
+  // Asset. Repeated commits return the previously registered Asset.
+  api_finish_image_upload : (text, ApiFinishImageUploadInput) -> (Result_2);
+  // Commits an image or MP4 upload and records its immutable descriptor as a
+  // Public Asset. Repeated commits return the previously registered Asset.
+  api_finish_media_upload : (text, ApiFinishImageUploadInput) -> (Result_2);
+  // Returns Public galleries visible to external publishers. The query validates
+  // the token without mutating its last-used timestamp.
+  api_list_galleries : (text) -> (Result_30) query;
+  api_upload_image_chunk : (text, ApiUploadImageChunkInput) -> (Result_31);
+  api_upload_media_chunk : (text, ApiUploadImageChunkInput) -> (Result_31);
+  archive_content : (nat64) -> (Result_20);
+  attach_asset : (nat64, nat64) -> (Result_19);
+  create_comment : (CreateCommentInput) -> (Result_22);
+  create_content : (CreateContentInput) -> (Result_20);
+  create_payment_intent : (CreatePaymentIntentInput) -> (Result_14);
+  detach_asset : (nat64, nat64) -> (Result_20);
+  get_asset_descriptor : (nat64) -> (Result_32) query;
+  get_frontend_origin_config : () -> (FrontendOriginConfig) query;
+  get_media_manifest : (nat64) -> (Result_24) query;
+  get_my_entitlement : () -> (opt Entitlement) query;
+  get_my_grant_deliveries : () -> (vec GrantDelivery) query;
+  get_my_payment_intent : (nat64) -> (Result_14) query;
+  get_my_payouts : () -> (vec Payout) query;
+  get_my_permissions : () -> (CallerPermissions) query;
+  get_my_refunds : () -> (vec Refund) query;
+  get_my_revenue_balance : () -> (RevenueBalance) query;
+  get_my_revenue_statement : () -> (vec RevenueAllocation) query;
+  get_operational_state : () -> (OperationalState) query;
+  get_payment_ledger : () -> (opt principal) query;
+  get_private_asset_descriptor : (nat64) -> (Result_32) query;
+  get_public_content : (text) -> (Result_20) query;
+  get_revenue_hold_ms : () -> (nat64) query;
+  get_site_config : () -> (SiteConfig) query;
+  get_storage_layout_status : () -> (StorageLayoutStatus) query;
+  get_transcode_job : (nat64) -> (Result_1) query;
+  http_request : (HttpRequest) -> (HttpResponse) query;
+  list_buckets : () -> (vec BucketRegistration) query;
+  list_comments : (nat64) -> (vec Comment) query;
+  list_comments_page : (nat64, opt nat64, nat16) -> (Result_33) query;
+  list_membership_products : () -> (vec MembershipProduct) query;
+  list_visible_contents : () -> (vec Content) query;
+  // Collects an approved membership payment via ICRC-2. The caller must first
+  // approve this Hub Canister as spender on the configured ledger. Repeating an
+  // interrupted call uses the same memo and `created_at_time`, so the ledger
+  // returns its original block instead of charging twice.
+  pay_with_icp : (nat64) -> (Result_14);
+  publish_content : (nat64) -> (Result_20);
+  report_transcode_job_failure : (nat64, text) -> (Result_1);
+  retry_my_entitlement_delivery : () -> (Result_15);
+  // Retries a paid entitlement or refund revocation whose Bucket delivery was
+  // interrupted. This never creates a newer version or changes expiry.
+  retry_my_entitlement_provisioning : () -> (Result_15);
+  start_transcode_job : (nat64) -> (Result_1);
+  submit_transcode_output : (nat64, SubmitTranscodeOutputInput) -> (Result_1);
+  update_content : (nat64, CreateContentInput) -> (Result_20);
+  whoami : () -> (principal) query;
+}
