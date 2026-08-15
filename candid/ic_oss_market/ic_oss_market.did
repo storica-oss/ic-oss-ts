@@ -1,16 +1,235 @@
 // [Account](https://github.com/dfinity/ICRC-1/blob/main/standards/ICRC-3/README.md#value)
 // representation of ledgers supporting the ICRC-1 standard.
 type Account = record { owner : principal; subaccount : opt blob };
+type AdminBottleReportPage = record {
+  next : opt blob;
+  items : vec AdminBottleReportView;
+};
+type AdminBottleReportPageRequest = record {
+  cursor : opt blob;
+  take : opt nat16;
+};
+type AdminBottleReportView = record {
+  bottle_id : nat64;
+  created_at_ms : nat64;
+  reporter : principal;
+  reason : text;
+};
+type AdminDashboard = record {
+  deployments : DeploymentPage;
+  tools : vec OfficialTool;
+  storage : MarketStorageStatus;
+  orders : OrderPage;
+  cycles : MarketCyclesStatus;
+  withdrawals : IcpWithdrawalPage;
+  updates : PlatformUpdatePage;
+  domains : MarketDomainConfig;
+  users : UserSummaryPage;
+  config : MarketConfig;
+  referral_withdrawals : ReferralWithdrawalPage;
+  referral_rewards : ReferralRewardPage;
+};
+type AdminSetDriftBottleStatusInput = record {
+  status : DriftBottleStatus;
+  bottle_id : nat64;
+  reason : text;
+};
+type BeginToolAttachmentUploadInput = record {
+  tool : UpsertOfficialToolInput;
+  content_type : text;
+  file_name : text;
+  expected_size : nat64;
+  expected_sha256 : blob;
+};
 type BeginWasmUploadInput = record {
   expected_size : nat64;
   version : text;
   expected_sha256 : blob;
   release_notes : text;
 };
+type BlockBottleParticipantInput = record {
+  request_id : blob;
+  blocked : bool;
+  participant : principal;
+};
+type BottleCatchPage = record { next : opt nat64; items : vec BottleCatchView };
+type BottleCatchView = record {
+  message_target : opt BottleMessageTarget;
+  listing_manifest_revision : nat64;
+  bottle_revision : nat64;
+  bottle_id : nat64;
+  caught_at_ms : nat64;
+  share : BottleShareRef;
+  catch_id : nat64;
+  introduction : text;
+  publisher_alias : text;
+  location : opt UserSubmittedLocation;
+};
+type BottleError = variant {
+  Internal : text;
+  AlreadyDelivered;
+  DailyCatchLimitReached;
+  InvalidInput : text;
+  AnonymousNotAllowed;
+  PendingLimitReached;
+  NoEligibleBottleSampled;
+  DailyCreateLimitReached;
+  Disabled;
+  ExternalCallFailed : text;
+  ChannelClosed;
+  NotFound;
+  Unauthorized;
+  OwnerActiveLimitReached;
+  SafetyCheckRequired;
+  SafetyCheckUnavailable;
+  GlobalActiveLimitReached;
+  Unavailable;
+  PendingOperation;
+  PoolEmpty;
+  Conflict : text;
+  MessageWindowClosed;
+};
+type BottleMessageTarget = record {
+  bottle_id : nat64;
+  catch_id : nat64;
+  deadline_ms : nat64;
+  market : principal;
+  source_bucket : principal;
+};
+type BottleMutationInput = record {
+  request_id : blob;
+  bottle_id : nat64;
+  expected_revision : nat64;
+};
+type BottleOwnerPage = record { next : opt nat64; items : vec BottleOwnerView };
+type BottleOwnerView = record {
+  id : nat64;
+  status : DriftBottleStatus;
+  listing_manifest_revision : nat64;
+  max_opens : nat8;
+  message_channel_revision : nat64;
+  share_id : blob;
+  messages_enabled : bool;
+  created_at_ms : nat64;
+  introduction : text;
+  source_bucket : principal;
+  revision : nat64;
+  location : opt UserSubmittedLocation;
+  successful_opens : nat8;
+  active_until_ms : nat64;
+};
+type BottlePageRequest = record { cursor : opt nat64; take : opt nat16 };
+type BottleQuotaView = record {
+  created : nat16;
+  day_id : nat64;
+  create_remaining : nat16;
+  create_limit : nat16;
+  resets_at_ms : nat64;
+  catch_limit : nat16;
+  caught : nat16;
+  catch_remaining : nat16;
+  global_create_limit : nat16;
+  global_catch_limit : nat16;
+  global_create_used : nat16;
+  global_catch_used : nat16;
+  global_create_remaining : nat16;
+  global_catch_remaining : nat16;
+};
+type BottleShareRef = record {
+  share_revision : nat64;
+  credential : FolderShareCredential;
+  bucket : principal;
+};
+type CollectDriftBottleGarbageInput = record { max_items : opt nat16 };
+type CollectDriftBottleGarbageOutput = record {
+  recovered_pending : nat16;
+  removed_unique_catches : nat16;
+  remaining_replays : nat64;
+  removed_abuse_records : nat16;
+  removed_bottle_tombstones : nat16;
+  removed_catch_receipts : nat16;
+  removed_delivery_reservations : nat16;
+  expired_bottles : nat16;
+  removed_daily_usage : nat16;
+  removed_replays : nat16;
+};
+type ConsentError = variant {
+  GenericError : record { description : text; error_code : nat };
+  InsufficientPayment : ConsentErrorInfo;
+  UnsupportedCanisterCall : ConsentErrorInfo;
+  ConsentMessageUnavailable : ConsentErrorInfo;
+};
+type ConsentErrorInfo = record { description : text };
+type ConsentInfo = record {
+  metadata : ConsentMessageMetadata;
+  consent_message : ConsentMessage;
+};
+type ConsentMessage = variant {
+  FieldsDisplayMessage : record {
+    fields : vec record { text; ConsentValue };
+    intent : text;
+  };
+  GenericDisplayMessage : text;
+};
+type ConsentMessageDeviceSpec = variant { GenericDisplay; FieldsDisplay };
+type ConsentMessageMetadata = record {
+  utc_offset_minutes : opt int16;
+  language : text;
+};
+type ConsentMessageRequest = record {
+  arg : blob;
+  method : text;
+  user_preferences : ConsentMessageSpec;
+};
+type ConsentMessageResponse = variant { Ok : ConsentInfo; Err : ConsentError };
+type ConsentMessageSpec = record {
+  metadata : ConsentMessageMetadata;
+  device_spec : opt ConsentMessageDeviceSpec;
+};
+type ConsentValue = variant {
+  Text : TextValue;
+  TokenAmount : TokenAmount;
+  TimestampSeconds : DurationSeconds;
+  DurationSeconds : DurationSeconds;
+};
+type ContentSafetyMode = variant { Required; RuleOnly };
+type ContentSafetyPublicKey = record {
+  public_key : blob;
+  key_id : text;
+  not_before_ms : nat64;
+  expires_at_ms : nat64;
+};
+type ContentSafetyVerifierConfig = record {
+  text_policy_version : text;
+  clock_skew_ms : nat64;
+  max_attestation_ttl_ms : nat64;
+  keys : vec ContentSafetyPublicKey;
+  mode : ContentSafetyMode;
+  policy_version : text;
+};
+type CreateDriftBottleInput = record {
+  request_id : blob;
+  credential : FolderShareCredential;
+  max_opens : nat8;
+  share_id : blob;
+  introduction : text;
+  listing_ticket : blob;
+  bucket : principal;
+  location : opt UserSubmittedLocation;
+  introduction_safety_attestation : opt blob;
+};
 type CreateOrderInput = record {
   name : text;
   deployment_target_id : opt text;
   idempotency_key : text;
+};
+type DeliveryAuthorization = record {
+  bottle_id : nat64;
+  reservation_expires_at_ms : nat64;
+  sender : principal;
+  catch_id : nat64;
+  body_sha256 : blob;
+  source_bucket : principal;
 };
 type Deployment = record {
   id : nat64;
@@ -58,6 +277,57 @@ type DeploymentTarget = record {
   cost_multiplier_basis_points : nat32;
   country_count : nat16;
 };
+type DriftBottleAdminPage = record {
+  next : opt nat64;
+  items : vec DriftBottleAdminView;
+};
+type DriftBottleAdminView = record {
+  owner : principal;
+  report_count : nat16;
+  bottle : BottleOwnerView;
+};
+type DriftBottleConfig = record {
+  auto_hide_report_threshold : nat16;
+  content_safety : opt ContentSafetyVerifierConfig;
+  bottle_ttl_ms : nat64;
+  global_pending_limit : nat16;
+  message_window_ms : nat64;
+  active_per_owner_limit : nat16;
+  enabled : bool;
+  daily_create_limit : nat16;
+  global_daily_create_limit : opt nat16;
+  global_active_limit : nat64;
+  daily_catch_limit : nat16;
+  global_daily_catch_limit : opt nat16;
+};
+type DriftBottleStatus = variant {
+  Exhausted;
+  PendingValidation;
+  Active;
+  Withdrawn;
+  Hidden;
+  Purged;
+  Expired;
+};
+type DriftBottleStorageStatus = record {
+  unique_catches : nat64;
+  pending_operations : nat16;
+  replay_records : nat64;
+  bottles : nat64;
+  payloads : nat64;
+  active_bottles : nat64;
+  delivery_reservations : nat64;
+  catches : nat64;
+};
+type DurationSeconds = record { amount : nat64 };
+type FinishBottleMessageInput = record {
+  request_id : blob;
+  sender : principal;
+  catch_id : nat64;
+  body_sha256 : blob;
+};
+type FishDriftBottleInput = record { request_id : blob };
+type FolderShareCredential = record { share_id : blob; secret : blob };
 type HttpRequest = record {
   url : text;
   method : text;
@@ -68,6 +338,7 @@ type HttpResponse = record {
   body : blob;
   headers : vec record { text; text };
   upgrade : opt bool;
+  streaming_strategy : opt StreamingStrategy;
   status_code : nat16;
 };
 type IcpWithdrawal = record {
@@ -102,6 +373,7 @@ type InitArgs = record {
 type MarketConfig = record {
   deployment_targets : vec record { text; DeploymentTarget };
   custom_domains : opt vec text;
+  referral_config : opt ReferralConfig;
   owner : principal;
   create_price_e8s : nat64;
   deployment_cycles : nat;
@@ -136,6 +408,7 @@ type MarketIcpRevenue = record {
   ledger : principal;
   withdrawn_e8s : nat64;
   balance_e8s : nat64;
+  referral_liability_e8s : nat64;
   market_account : Account;
   recorded_revenue_e8s : nat64;
 };
@@ -145,6 +418,7 @@ type MarketSalesReadiness = record {
   ready : bool;
 };
 type MarketStorageStatus = record {
+  tool_attachment_bytes : nat64;
   previous_snapshot_bytes : nat64;
   wasm_versions : nat64;
   active_generation : nat8;
@@ -152,14 +426,51 @@ type MarketStorageStatus = record {
   wasm_bytes : nat64;
   active_snapshot_bytes : nat64;
   layout_version : nat16;
+  pending_tool_upload_bytes : nat64;
+  tool_attachments : nat64;
 };
 type MarketUpgradeReadiness = record {
   processing_orders : nat64;
   provisioning_orders : nat64;
   pending_withdrawals : nat64;
+  // Optional keeps the pre-referral readiness response upgrade-compatible.
+  pending_referral_withdrawals : opt nat64;
   refunding_orders : nat64;
   paid_orders : nat64;
   ready : bool;
+};
+type MyDashboard = record {
+  deployments : DeploymentPage;
+  "principal" : principal;
+  referral : opt ReferralSummary;
+  is_admin : bool;
+  orders : OrderPage;
+  upgrades : UpgradePage;
+  referral_withdrawals : ReferralWithdrawalPage;
+  referral_rewards : ReferralRewardPage;
+};
+type OfficialTool = record {
+  id : nat64;
+  homepage_url : opt text;
+  featured : bool;
+  documentation_url : opt text;
+  description_zh : opt text;
+  external_url : opt text;
+  kind : ToolKind;
+  published : bool;
+  name : text;
+  slug : text;
+  sort_order : nat16;
+  description : text;
+  updated_at_ms : nat64;
+  created_by : principal;
+  created_at_ms : nat64;
+  version : text;
+  summary : text;
+  platforms : vec text;
+  summary_zh : opt text;
+  name_zh : opt text;
+  attachment : opt ToolAttachment;
 };
 type OperationKind = variant { Upgrade; Create };
 type Order = record {
@@ -167,12 +478,14 @@ type Order = record {
   last_error : opt text;
   status : OrderStatus;
   requested_name : opt text;
+  referrer : opt principal;
   refunded_at_ms : opt nat64;
   kind : OperationKind;
   ledger_block : opt nat64;
   target_subnet_id : opt principal;
   created_at_ms : nat64;
   amount_e8s : nat64;
+  referral_discount_e8s : opt nat64;
   deployment_cycles : opt nat;
   transfer_created_at_time : nat64;
   provisioning_started_at_ms : opt nat64;
@@ -181,6 +494,8 @@ type Order = record {
   buyer : principal;
   target_version_id : nat64;
   deployment_target_id : text;
+  referral_reward_e8s : opt nat64;
+  referral_reward_id : opt nat64;
   expires_at_ms : nat64;
   deployment_id : opt nat64;
   idempotency_key : text;
@@ -209,8 +524,39 @@ type OssAccess = record {
   deployment_id : nat64;
 };
 type PageRequest = record { cursor : opt nat64; limit : nat16 };
+type PlatformUpdate = record {
+  id : nat64;
+  title : text;
+  content : text;
+  content_zh : opt text;
+  kind : PlatformUpdateKind;
+  published : bool;
+  slug : text;
+  updated_at_ms : nat64;
+  created_by : principal;
+  published_at_ms : opt nat64;
+  created_at_ms : nat64;
+  version : opt text;
+  summary : text;
+  summary_zh : opt text;
+  title_zh : opt text;
+};
+type PlatformUpdateKind = variant {
+  Release;
+  Announcement;
+  Security;
+  Maintenance;
+  Feature;
+};
+type PlatformUpdatePage = record {
+  total : nat64;
+  next_cursor : opt nat64;
+  items : vec PlatformUpdate;
+};
 type PublicConfig = record {
   deployment_targets : vec DeploymentTarget;
+  // Optional keeps pre-referral canisters decodable during a rolling upgrade.
+  referral_config : opt ReferralConfig;
   available_deployment_slots : nat64;
   create_price_e8s : nat64;
   upgrade_price_e8s : nat64;
@@ -218,31 +564,144 @@ type PublicConfig = record {
   sales_enabled : bool;
   payment_ledger : opt principal;
 };
-type Result = variant { Ok : MarketConfig; Err : text };
-type Result_1 = variant { Ok : nat64; Err : text };
-type Result_10 = variant { Ok : vec Order; Err : text };
-type Result_11 = variant { Ok : OrderPage; Err : text };
-type Result_12 = variant { Ok : vec UserSummary; Err : text };
-type Result_13 = variant { Ok : UserSummaryPage; Err : text };
-type Result_14 = variant { Ok : Order; Err : text };
-type Result_15 = variant { Ok : MarketDomainConfig; Err : text };
-type Result_16 = variant { Ok : TransferMarketCyclesOutput; Err : text };
-type Result_17 = variant { Ok : DeploymentTarget; Err : text };
-type Result_18 = variant { Ok : IcpWithdrawal; Err : text };
-type Result_19 = variant { Ok : Deployment; Err : text };
-type Result_2 = variant { Ok : WasmVersionSummary; Err : text };
-type Result_20 = variant { Ok : OssAccess; Err : text };
-type Result_21 = variant { Ok : record { principal; bool }; Err : text };
-type Result_22 = variant { Ok : vec UpgradeRecord; Err : text };
-type Result_23 = variant { Ok : UpgradePage; Err : text };
-type Result_24 = variant { Ok : WasmVersionPage; Err : text };
-type Result_3 = variant { Ok : MarketCyclesStatus; Err : text };
-type Result_4 = variant { Ok : MarketIcpRevenue; Err : text };
-type Result_5 = variant { Ok : MarketStorageStatus; Err : text };
-type Result_6 = variant { Ok : MarketUpgradeReadiness; Err : text };
-type Result_7 = variant { Ok : vec Deployment; Err : text };
-type Result_8 = variant { Ok : DeploymentPage; Err : text };
-type Result_9 = variant { Ok : IcpWithdrawalPage; Err : text };
+type PublicDashboard = record {
+  tools : vec OfficialTool;
+  sales_readiness : MarketSalesReadiness;
+  updates : PlatformUpdatePage;
+  config : PublicConfig;
+  versions : WasmVersionPage;
+};
+type ReferralAccount = record {
+  reward_ledger : opt principal;
+  "principal" : principal;
+  code : text;
+  referred_by : opt principal;
+  total_earned_e8s : nat64;
+  created_at_ms : nat64;
+  available_reward_e8s : nat64;
+  referred_at_ms : opt nat64;
+  total_withdrawn_e8s : nat64;
+  qualified_order_id : opt nat64;
+  discount_order_id : opt nat64;
+};
+type ReferralConfig = record {
+  withdrawal_threshold_e8s : nat64;
+  inviter_reward_e8s : nat64;
+  enabled : bool;
+  new_user_discount_e8s : nat64;
+};
+type ReferralReward = record {
+  id : nat64;
+  referred_user : principal;
+  inviter : principal;
+  created_at_ms : nat64;
+  amount_e8s : nat64;
+  ledger : principal;
+  order_id : nat64;
+};
+type ReferralRewardPage = record {
+  total : nat64;
+  next_cursor : opt nat64;
+  items : vec ReferralReward;
+};
+type ReferralSummary = record {
+  account : ReferralAccount;
+  config : ReferralConfig;
+  invited_count : nat64;
+  qualified_count : nat64;
+};
+type ReferralWithdrawal = record {
+  id : nat64;
+  to : Account;
+  last_error : opt text;
+  status : IcpWithdrawalStatus;
+  owner : principal;
+  completed_at_ms : opt nat64;
+  ledger_block : opt nat64;
+  fee_e8s : nat64;
+  created_at_ms : nat64;
+  amount_e8s : nat64;
+  ledger : principal;
+  transfer_created_at_time : nat64;
+  idempotency_key : text;
+};
+type ReferralWithdrawalPage = record {
+  total : nat64;
+  next_cursor : opt nat64;
+  items : vec ReferralWithdrawal;
+};
+type RefreshDriftBottleShareInput = record {
+  request_id : blob;
+  credential : FolderShareCredential;
+  bottle_id : nat64;
+  listing_ticket : blob;
+  expected_revision : nat64;
+};
+type ReportBottleInput = record {
+  request_id : blob;
+  bottle_id : nat64;
+  reason : text;
+};
+type ReserveBottleMessageInput = record {
+  request_id : blob;
+  bottle_id : nat64;
+  sender : principal;
+  catch_id : nat64;
+  body_sha256 : blob;
+  safety_attestation : opt blob;
+};
+type Result = variant { Ok; Err : BottleError };
+type Result_1 = variant { Ok : MarketConfig; Err : text };
+type Result_10 = variant { Ok : MarketUpgradeReadiness; Err : text };
+type Result_11 = variant { Ok : vec Deployment; Err : text };
+type Result_12 = variant { Ok : DeploymentPage; Err : text };
+type Result_13 = variant { Ok : AdminBottleReportPage; Err : BottleError };
+type Result_14 = variant { Ok : DriftBottleAdminPage; Err : BottleError };
+type Result_15 = variant { Ok : IcpWithdrawalPage; Err : text };
+type Result_16 = variant { Ok : vec OfficialTool; Err : text };
+type Result_17 = variant { Ok : vec Order; Err : text };
+type Result_18 = variant { Ok : OrderPage; Err : text };
+type Result_19 = variant { Ok : PlatformUpdatePage; Err : text };
+type Result_2 = variant { Ok : nat64; Err : text };
+type Result_20 = variant { Ok : ReferralRewardPage; Err : text };
+type Result_21 = variant { Ok : ReferralWithdrawalPage; Err : text };
+type Result_22 = variant { Ok : vec UserSummary; Err : text };
+type Result_23 = variant { Ok : UserSummaryPage; Err : text };
+type Result_24 = variant { Ok : Order; Err : text };
+type Result_25 = variant { Ok : MarketDomainConfig; Err : text };
+type Result_26 = variant { Ok : BottleOwnerView; Err : BottleError };
+type Result_27 = variant { Ok : TransferMarketCyclesOutput; Err : text };
+type Result_28 = variant { Ok : DriftBottleConfig; Err : BottleError };
+type Result_29 = variant { Ok : ReferralConfig; Err : text };
+type Result_3 = variant { Ok : OfficialTool; Err : text };
+type Result_30 = variant { Ok : DeploymentTarget; Err : text };
+type Result_31 = variant { Ok : PlatformUpdate; Err : text };
+type Result_32 = variant { Ok : IcpWithdrawal; Err : text };
+type Result_33 = variant { Ok : ReferralSummary; Err : text };
+type Result_34 = variant {
+  Ok : CollectDriftBottleGarbageOutput;
+  Err : BottleError;
+};
+type Result_35 = variant { Ok : Deployment; Err : text };
+type Result_36 = variant { Ok : BottleCatchView; Err : BottleError };
+type Result_37 = variant { Ok : AdminDashboard; Err : text };
+type Result_38 = variant { Ok : MyDashboard; Err : text };
+type Result_39 = variant { Ok : BottleQuotaView; Err : BottleError };
+type Result_4 = variant { Ok : WasmVersionSummary; Err : text };
+type Result_40 = variant { Ok : OssAccess; Err : text };
+type Result_41 = variant { Ok : record { principal; bool }; Err : text };
+type Result_42 = variant { Ok : BottleCatchPage; Err : BottleError };
+type Result_43 = variant { Ok : BottleOwnerPage; Err : BottleError };
+type Result_44 = variant { Ok : vec UpgradeRecord; Err : text };
+type Result_45 = variant { Ok : UpgradePage; Err : text };
+type Result_46 = variant { Ok : WasmVersionPage; Err : text };
+type Result_47 = variant { Ok : DeliveryAuthorization; Err : BottleError };
+type Result_48 = variant { Ok : ReferralWithdrawal; Err : text };
+type Result_5 = variant { Ok; Err : text };
+type Result_6 = variant { Ok : MarketCyclesStatus; Err : text };
+type Result_7 = variant { Ok : DriftBottleStorageStatus; Err : BottleError };
+type Result_8 = variant { Ok : MarketIcpRevenue; Err : text };
+type Result_9 = variant { Ok : MarketStorageStatus; Err : text };
 type SalesReadinessBlocker = variant {
   DeploymentTargetMissing;
   PaymentLedgerMissing;
@@ -251,6 +710,12 @@ type SalesReadinessBlocker = variant {
   InsufficientCycles;
   CreatePriceZero;
   DeploymentCyclesZero;
+};
+type SetBottleMessagesInput = record {
+  request_id : blob;
+  bottle_id : nat64;
+  enabled : bool;
+  expected_revision : nat64;
 };
 type SetOssControllersInput = record {
   controllers : vec principal;
@@ -261,6 +726,41 @@ type SetOssManagersInput = record {
   managers : vec principal;
   expected_managers : vec principal;
   deployment_id : nat64;
+};
+type StreamingCallbackResponse = record {
+  token : opt StreamingCallbackToken;
+  body : blob;
+};
+type StreamingCallbackToken = record {
+  chunk_index : nat32;
+  sha256 : blob;
+  tool_id : nat64;
+};
+type StreamingStrategy = variant {
+  Callback : record {
+    token : StreamingCallbackToken;
+    callback : func (StreamingCallbackToken) -> (
+        StreamingCallbackResponse,
+      ) query;
+  };
+};
+type SupportedStandard = record { url : text; name : text };
+type TextValue = record { content : text };
+type TokenAmount = record { decimals : nat8; amount : nat64; symbol : text };
+type ToolAttachment = record {
+  sha256 : blob;
+  size : nat64;
+  content_type : text;
+  file_name : text;
+  download_path : text;
+};
+type ToolKind = variant {
+  Sdk;
+  BrowserExtension;
+  CommandLine;
+  Other;
+  Desktop;
+  Integration;
 };
 type TransferMarketCyclesInput = record {
   to_canister : principal;
@@ -277,6 +777,13 @@ type UpdateConfigInput = record {
   upgrade_price_e8s : nat64;
   sales_enabled : bool;
   payment_ledger : opt principal;
+};
+type UpdateDriftBottleIntroductionInput = record {
+  request_id : blob;
+  bottle_id : nat64;
+  introduction : text;
+  expected_revision : nat64;
+  introduction_safety_attestation : opt blob;
 };
 type UpgradeOrderInput = record {
   deployment_id : nat64;
@@ -303,7 +810,45 @@ type UpgradeRecord = record {
   from_module_hash : opt blob;
   deployment_id : nat64;
 };
+type UpsertOfficialToolInput = record {
+  id : opt nat64;
+  homepage_url : opt text;
+  featured : bool;
+  documentation_url : opt text;
+  description_zh : opt text;
+  external_url : opt text;
+  kind : ToolKind;
+  published : bool;
+  name : text;
+  slug : text;
+  sort_order : nat16;
+  description : text;
+  version : text;
+  summary : text;
+  platforms : vec text;
+  summary_zh : opt text;
+  name_zh : opt text;
+};
+type UpsertPlatformUpdateInput = record {
+  id : opt nat64;
+  title : text;
+  content : text;
+  content_zh : opt text;
+  kind : PlatformUpdateKind;
+  published : bool;
+  slug : text;
+  version : opt text;
+  summary : text;
+  summary_zh : opt text;
+  title_zh : opt text;
+};
 type UserPageRequest = record { cursor : opt principal; limit : nat16 };
+type UserSubmittedLocation = record {
+  region : opt text;
+  source : opt text;
+  city : opt text;
+  country_code : opt text;
+};
 type UserSummary = record {
   last_active_at_ms : nat64;
   total_paid_e8s : nat64;
@@ -337,55 +882,115 @@ type WithdrawIcpInput = record {
   idempotency_key : text;
 };
 service : (InitArgs) -> {
-  accept_market_ownership : () -> (Result);
-  admin_begin_wasm_upload : (BeginWasmUploadInput) -> (Result_1);
-  admin_cleanup_expired_orders : () -> (Result_1);
-  admin_commit_wasm_upload : (nat64, bool) -> (Result_2);
-  admin_get_config : () -> (Result) query;
-  admin_get_cycles_status : () -> (Result_3) query;
-  admin_get_icp_revenue : () -> (Result_4);
-  admin_get_storage_status : () -> (Result_5) query;
-  admin_get_upgrade_readiness : () -> (Result_6) query;
-  admin_list_deployments : () -> (Result_7) query;
-  admin_list_deployments_page : (PageRequest) -> (Result_8) query;
-  admin_list_icp_withdrawals_page : (PageRequest) -> (Result_9) query;
-  admin_list_orders : () -> (Result_10) query;
-  admin_list_orders_page : (PageRequest) -> (Result_11) query;
-  admin_list_users : () -> (Result_12) query;
-  admin_list_users_page : (UserPageRequest) -> (Result_13) query;
-  admin_propose_owner : (opt principal) -> (Result);
-  admin_reconcile_order_refund : (nat64, nat64) -> (Result_14);
-  admin_refund_order : (nat64) -> (Result_14);
-  admin_remove_deployment_target : (text) -> (Result);
-  admin_set_admin : (principal, bool) -> (Result);
-  admin_set_custom_domains : (vec text) -> (Result_15);
-  admin_set_version_published : (nat64, bool) -> (Result_2);
-  admin_transfer_cycles : (TransferMarketCyclesInput) -> (Result_16);
-  admin_update_config : (UpdateConfigInput) -> (Result);
-  admin_upload_wasm_chunk : (nat64, nat32, blob) -> (Result_1);
-  admin_upsert_deployment_target : (DeploymentTarget) -> (Result_17);
-  admin_withdraw_icp : (WithdrawIcpInput) -> (Result_18);
-  create_deployment_order : (CreateOrderInput) -> (Result_14);
-  create_upgrade_order : (UpgradeOrderInput) -> (Result_14);
-  detach_market_from_my_oss : (nat64) -> (Result_19);
+  abort_bottle_message_delivery : (FinishBottleMessageInput) -> (Result);
+  accept_market_ownership : () -> (Result_1);
+  admin_begin_tool_attachment_upload : (BeginToolAttachmentUploadInput) -> (
+      Result_2,
+    );
+  admin_begin_wasm_upload : (BeginWasmUploadInput) -> (Result_2);
+  admin_cleanup_expired_orders : () -> (Result_2);
+  admin_commit_tool_attachment_upload : (nat64) -> (Result_3);
+  admin_commit_wasm_upload : (nat64, bool) -> (Result_4);
+  admin_delete_official_tool : (nat64) -> (Result_5);
+  admin_delete_platform_update : (nat64) -> (Result_5);
+  admin_get_config : () -> (Result_1) query;
+  admin_get_cycles_status : () -> (Result_6) query;
+  admin_get_drift_bottle_storage_status : () -> (Result_7) query;
+  admin_get_drift_bottle_quota : () -> (Result_39) query;
+  admin_get_icp_revenue : () -> (Result_8);
+  admin_get_storage_status : () -> (Result_9) query;
+  admin_get_upgrade_readiness : () -> (Result_10) query;
+  admin_list_deployments : () -> (Result_11) query;
+  admin_list_deployments_page : (PageRequest) -> (Result_12) query;
+  admin_list_drift_bottle_reports : (AdminBottleReportPageRequest) -> (
+      Result_13,
+    ) query;
+  admin_list_drift_bottles : (BottlePageRequest) -> (Result_14) query;
+  admin_list_icp_withdrawals_page : (PageRequest) -> (Result_15) query;
+  admin_list_official_tools : () -> (Result_16) query;
+  admin_list_orders : () -> (Result_17) query;
+  admin_list_orders_page : (PageRequest) -> (Result_18) query;
+  admin_list_platform_updates_page : (PageRequest) -> (Result_19) query;
+  admin_list_referral_rewards_page : (PageRequest) -> (Result_20) query;
+  admin_list_referral_withdrawals_page : (PageRequest) -> (Result_21) query;
+  admin_list_users : () -> (Result_22) query;
+  admin_list_users_page : (UserPageRequest) -> (Result_23) query;
+  admin_propose_owner : (opt principal) -> (Result_1);
+  admin_reconcile_order_refund : (nat64, nat64) -> (Result_24);
+  admin_refund_order : (nat64) -> (Result_24);
+  admin_remove_deployment_target : (text) -> (Result_1);
+  admin_set_admin : (principal, bool) -> (Result_1);
+  admin_set_custom_domains : (vec text) -> (Result_25);
+  admin_set_drift_bottle_status : (AdminSetDriftBottleStatusInput) -> (
+      Result_26,
+    );
+  admin_set_version_published : (nat64, bool) -> (Result_4);
+  admin_transfer_cycles : (TransferMarketCyclesInput) -> (Result_27);
+  admin_update_config : (UpdateConfigInput) -> (Result_1);
+  admin_update_drift_bottle_config : (DriftBottleConfig) -> (Result_28);
+  admin_update_referral_config : (ReferralConfig) -> (Result_29);
+  admin_upload_tool_attachment_chunk : (nat64, nat32, blob) -> (Result_2);
+  admin_upload_wasm_chunk : (nat64, nat32, blob) -> (Result_2);
+  admin_upsert_deployment_target : (DeploymentTarget) -> (Result_30);
+  admin_upsert_official_tool : (UpsertOfficialToolInput) -> (Result_3);
+  admin_upsert_platform_update : (UpsertPlatformUpdateInput) -> (Result_31);
+  admin_withdraw_icp : (WithdrawIcpInput) -> (Result_32);
+  block_bottle_participant : (BlockBottleParticipantInput) -> (Result);
+  claim_referral : (text) -> (Result_33);
+  collect_drift_bottle_garbage : (CollectDriftBottleGarbageInput) -> (
+      Result_34,
+    );
+  confirm_bottle_message_delivery : (FinishBottleMessageInput) -> (Result);
+  create_deployment_order : (CreateOrderInput) -> (Result_24);
+  create_drift_bottle : (CreateDriftBottleInput) -> (Result_26);
+  create_upgrade_order : (UpgradeOrderInput) -> (Result_24);
+  detach_market_from_my_oss : (nat64) -> (Result_35);
+  ensure_my_referral_account : () -> (Result_33);
+  fish_drift_bottle : (FishDriftBottleInput) -> (Result_36);
+  get_admin_dashboard : () -> (Result_37) query;
   get_domain_config : () -> (MarketDomainConfig) query;
+  get_drift_bottle_config : () -> (DriftBottleConfig) query;
   get_market_sales_readiness : () -> (MarketSalesReadiness) query;
-  get_my_oss_access : (nat64) -> (Result_20);
+  get_my_dashboard : () -> (Result_38) query;
+  get_my_drift_bottle_quota : () -> (Result_39) query;
+  get_my_oss_access : (nat64) -> (Result_40);
+  get_my_referral_summary : () -> (Result_33) query;
+  get_platform_update : (text) -> (opt PlatformUpdate) query;
   get_public_config : () -> (PublicConfig) query;
-  get_session : () -> (Result_21) query;
+  get_public_dashboard : () -> (PublicDashboard) query;
+  get_session : () -> (Result_41) query;
   http_request : (HttpRequest) -> (HttpResponse) query;
-  list_my_deployments : () -> (Result_7) query;
-  list_my_deployments_page : (PageRequest) -> (Result_8) query;
-  list_my_orders : () -> (Result_10) query;
-  list_my_orders_page : (PageRequest) -> (Result_11) query;
-  list_my_upgrades : () -> (Result_22) query;
-  list_my_upgrades_page : (PageRequest) -> (Result_23) query;
+  icrc10_supported_standards : () -> (vec SupportedStandard) query;
+  icrc21_canister_call_consent_message : (ConsentMessageRequest) -> (
+      ConsentMessageResponse,
+    );
+  list_my_bottle_catches : (BottlePageRequest) -> (Result_42) query;
+  list_my_deployments : () -> (Result_11) query;
+  list_my_deployments_page : (PageRequest) -> (Result_12) query;
+  list_my_drift_bottles : (BottlePageRequest) -> (Result_43) query;
+  list_my_orders : () -> (Result_17) query;
+  list_my_orders_page : (PageRequest) -> (Result_18) query;
+  list_my_referral_rewards_page : (PageRequest) -> (Result_20) query;
+  list_my_referral_withdrawals_page : (PageRequest) -> (Result_21) query;
+  list_my_upgrades : () -> (Result_44) query;
+  list_my_upgrades_page : (PageRequest) -> (Result_45) query;
+  list_official_tools : () -> (vec OfficialTool) query;
+  list_platform_updates_page : (PageRequest) -> (Result_19) query;
   list_versions : () -> (vec WasmVersionSummary) query;
-  list_versions_page : (PageRequest) -> (Result_24) query;
-  pay_order : (nat64) -> (Result_14);
-  reconcile_order_payment : (nat64, nat64) -> (Result_14);
-  refresh_my_deployment : (nat64) -> (Result_19);
-  retry_order : (nat64) -> (Result_14);
-  set_my_oss_controllers : (SetOssControllersInput) -> (Result_20);
-  set_my_oss_managers : (SetOssManagersInput) -> (Result_20);
+  list_versions_page : (PageRequest) -> (Result_46) query;
+  pay_order : (nat64) -> (Result_24);
+  reconcile_order_payment : (nat64, nat64) -> (Result_24);
+  refresh_drift_bottle_share : (RefreshDriftBottleShareInput) -> (Result_26);
+  refresh_my_deployment : (nat64) -> (Result_35);
+  report_drift_bottle : (ReportBottleInput) -> (Result);
+  reserve_bottle_message_delivery : (ReserveBottleMessageInput) -> (Result_47);
+  retry_order : (nat64) -> (Result_24);
+  set_drift_bottle_messages : (SetBottleMessagesInput) -> (Result_26);
+  set_my_oss_controllers : (SetOssControllersInput) -> (Result_40);
+  set_my_oss_managers : (SetOssManagersInput) -> (Result_40);
+  update_drift_bottle_introduction : (UpdateDriftBottleIntroductionInput) -> (
+      Result_26,
+    );
+  withdraw_drift_bottle : (BottleMutationInput) -> (Result_26);
+  withdraw_referral_reward : (WithdrawIcpInput) -> (Result_48);
 }

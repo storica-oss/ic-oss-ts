@@ -19,7 +19,10 @@ export async function* readableStreamAsyncIterator<T>(self: ReadableStream<T>) {
   }
 }
 
-export async function toFixedChunkSizeReadable(file: FileConfig) {
+export async function toFixedChunkSizeReadable(
+  file: FileConfig,
+  chunkSize: number = CHUNK_SIZE
+) {
   if (typeof File === 'function' && file.content instanceof File) {
     if (!file.name) {
       file.name = file.content.name
@@ -31,7 +34,7 @@ export async function toFixedChunkSizeReadable(file: FileConfig) {
       file.size = file.content.size
     }
     return streamToFixedChunkSizeReadable(
-      CHUNK_SIZE,
+      chunkSize,
       file.content.stream() as any as ReadableStream<Uint8Array>
     )
   }
@@ -44,7 +47,7 @@ export async function toFixedChunkSizeReadable(file: FileConfig) {
       file.size = file.content.size
     }
     return streamToFixedChunkSizeReadable(
-      CHUNK_SIZE,
+      chunkSize,
       file.content.stream() as any as ReadableStream<Uint8Array>
     )
   }
@@ -55,14 +58,14 @@ export async function toFixedChunkSizeReadable(file: FileConfig) {
     file.content instanceof ArrayBuffer
   ) {
     return uint8ArrayToFixedChunkSizeReadable(
-      CHUNK_SIZE,
+      chunkSize,
       Uint8Array.from(file.content as ArrayLike<number>)
     )
   }
 
   if (file.content instanceof ReadableStream) {
     return streamToFixedChunkSizeReadable(
-      CHUNK_SIZE,
+      chunkSize,
       file.content as any as ReadableStream<Uint8Array>
     )
   }
@@ -83,7 +86,7 @@ export async function toFixedChunkSizeReadable(file: FileConfig) {
     // try to fix "Closing file descriptor xx on garbage collection"
     ;(file as any).originFile = fs
     return streamToFixedChunkSizeReadable(
-      CHUNK_SIZE,
+      chunkSize,
       fs.readableWebStream() as any as ReadableStream<Uint8Array>,
       fs
     )

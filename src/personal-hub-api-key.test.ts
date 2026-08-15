@@ -1,5 +1,5 @@
 import { Principal } from '@dfinity/principal'
-import { sha3_256 } from '@noble/hashes/sha3'
+import { sha3_256 } from '@noble/hashes/sha3.js'
 import { describe, expect, test, vi } from 'vitest'
 import {
   normalizeApiMediaName,

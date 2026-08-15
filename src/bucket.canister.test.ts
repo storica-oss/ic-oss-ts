@@ -1,7 +1,17 @@
 import { Principal } from '@dfinity/principal'
+import { sha3_256 } from '@noble/hashes/sha3.js'
 import { describe, expect, test, vi } from 'vitest'
 import type { _SERVICE as BucketService } from '../candid/ic_oss_bucket/ic_oss_bucket.did.js'
-import { BucketCanister } from './bucket.canister'
+import {
+  BucketCanister,
+  createFolderShareCodeMaterial,
+  createFolderShareCodeSecret,
+  createFolderShareMaterial,
+  createFolderShareSecret,
+  EncryptionZoneKeyCache,
+  hashFolderShareSecret
+} from './bucket.canister'
+import { encryptFileChunk, prepareFileEncryption } from './encryption'
 
 const token = new Uint8Array([1, 2, 3])
 
@@ -15,6 +25,150 @@ function bucketWith(service: Partial<BucketService>, accessToken = token) {
 }
 
 describe('BucketCanister v2 service wiring', () => {
+  test('matches the Rust folder share hash vector', () => {
+    const shareId = Uint8Array.from({ length: 16 }, (_, index) => index)
+    const secret = Uint8Array.from({ length: 32 }, (_, index) => index + 16)
+    expect(
+      Buffer.from(
+        hashFolderShareSecret(Principal.anonymous(), shareId, secret)
+      ).toString('hex')
+    ).toBe('59fbc55f6e1fb2ae16f43fbbe71bee406316a4667c57a639b6410f317797f908')
+  })
+
+  test('creates domain-separated share credentials and rotates only the secret', () => {
+    const canister = Principal.selfAuthenticating(new Uint8Array([7, 8, 9]))
+    let next = 1
+    const deterministicRandom = (value: Uint8Array) => {
+      value.fill(next++)
+      return value
+    }
+    const material = createFolderShareMaterial(canister, deterministicRandom)
+    expect(material.shareId).toEqual(new Uint8Array(16).fill(1))
+    expect(material.secret).toEqual(new Uint8Array(32).fill(2))
+    expect(material.secretHash).toEqual(
+      hashFolderShareSecret(canister, material.shareId, material.secret)
+    )
+
+    const rotated = createFolderShareSecret(
+      canister,
+      material.shareId,
+      deterministicRandom
+    )
+    expect(rotated.credential.share_id).toBe(material.shareId)
+    expect(rotated.secret).toEqual(new Uint8Array(32).fill(3))
+    expect(rotated.secretHash).not.toEqual(material.secretHash)
+  })
+
+  test('derives portable credentials from an editable short code', () => {
+    const canister = Principal.selfAuthenticating(new Uint8Array([7, 8, 9]))
+    const material = createFolderShareCodeMaterial(
+      canister,
+      'AB12CD',
+      (bytes) => bytes.fill(3)
+    )
+    expect(material.shareId).toEqual(new Uint8Array(16).fill(3))
+    expect(material.code).toBe('AB12CD')
+    expect(material.codeHash).toHaveLength(32)
+    expect(material.secretHash).toEqual(
+      hashFolderShareSecret(canister, material.shareId, material.secret)
+    )
+    const restored = createFolderShareCodeSecret(
+      canister,
+      material.shareId,
+      'ab-12-cd'
+    )
+    expect(restored.secret).toEqual(material.secret)
+    expect(restored.codeHash).toEqual(material.codeHash)
+  })
+
+  test('looks up a short share code through the public query', async () => {
+    const output = { share_id: new Uint8Array(16).fill(8) }
+    const service = {
+      lookup_folder_share_code: vi.fn().mockResolvedValue({ Ok: output })
+    }
+    const bucket = bucketWith(service)
+    const input = { code_hash: new Uint8Array(32).fill(4) }
+    await expect(bucket.lookupFolderShareCode(input)).resolves.toEqual(output)
+    expect(service.lookup_folder_share_code).toHaveBeenCalledWith(input)
+  })
+
+  test('bounds the opt-in Zone key cache and returns defensive key copies', () => {
+    const bucket = Principal.anonymous()
+    const cache = new EncryptionZoneKeyCache({ ttlMs: 60_000, maxEntries: 1 })
+    const zone = {
+      zone_id: new Uint8Array(32).fill(1),
+      revision: 1n
+    } as never
+    const key = new Uint8Array(32).fill(7)
+    cache.set(bucket, { zone, zoneWrappingKey: key })
+    const first = cache.get(bucket, zone)!
+    first.zoneWrappingKey.fill(9)
+    expect(cache.get(bucket, zone)?.zoneWrappingKey).toEqual(
+      new Uint8Array(32).fill(7)
+    )
+    cache.clear()
+    expect(cache.get(bucket, zone)).toBeUndefined()
+  })
+
+  test('streams authenticated encrypted chunks and verifies the final ciphertext hash', async () => {
+    const zoneWrappingKey = new Uint8Array(32).fill(4)
+    const plaintext = new TextEncoder().encode('streamed encrypted payload')
+    const prepared = prepareFileEncryption(
+      new Uint8Array(32).fill(2),
+      zoneWrappingKey,
+      BigInt(plaintext.byteLength),
+      12
+    )
+    const chunks = [
+      plaintext.slice(0, 12),
+      plaintext.slice(12, 24),
+      plaintext.slice(24)
+    ].map((chunk, index) =>
+      encryptFileChunk(prepared.info, prepared.fileDek, index, chunk)
+    )
+    const ciphertext = new Uint8Array(
+      chunks.reduce((total, chunk) => total + chunk.byteLength, 0)
+    )
+    let offset = 0
+    for (const chunk of chunks) {
+      ciphertext.set(chunk, offset)
+      offset += chunk.byteLength
+    }
+    const file = {
+      id: 9,
+      generation: 3n,
+      size: BigInt(ciphertext.byteLength),
+      filled: BigInt(ciphertext.byteLength),
+      chunks: chunks.length,
+      hash: [sha3_256(ciphertext)],
+      encryption: [prepared.info]
+    }
+    const service = {
+      get_file_info: vi.fn().mockResolvedValue({ Ok: file }),
+      read_file_chunk: vi
+        .fn()
+        .mockImplementation(async ({ index }: { index: number }) => ({
+          Ok: chunks[index]
+        }))
+    }
+    const bucket = bucketWith(service)
+    vi.spyOn(bucket, 'openEncryptionZone').mockResolvedValue({
+      zone: {} as never,
+      zoneWrappingKey: new Uint8Array(zoneWrappingKey)
+    })
+
+    const opened = await bucket.readEncryptedFileStream(9)
+    const reader = opened.stream.getReader()
+    const output: number[] = []
+    while (true) {
+      const next = await reader.read()
+      if (next.done) break
+      output.push(...next.value)
+    }
+    await expect(opened.closed).resolves.toBeUndefined()
+    expect(new Uint8Array(output)).toEqual(plaintext)
+  })
+
   test('checks controller access without decoding full canister status', async () => {
     const service = {
       is_caller_controller: vi.fn().mockResolvedValue(true)
@@ -175,6 +329,37 @@ describe('BucketCanister v2 service wiring', () => {
     expect(service.admin_transfer_cycles).toHaveBeenCalledWith(input)
   })
 
+  test('toggles the isolated public website without an access token', async () => {
+    const config = {
+      enabled: true,
+      folder_id: [7] as [number],
+      root_name: 'sites'
+    }
+    const service = {
+      admin_set_website_enabled: vi.fn().mockResolvedValue({ Ok: config })
+    }
+    const bucket = bucketWith(service)
+
+    await expect(bucket.adminSetWebsiteEnabled(true)).resolves.toBe(config)
+    expect(service.admin_set_website_enabled).toHaveBeenCalledWith(true)
+  })
+
+  test('configures a custom public website root without an access token', async () => {
+    const input = { enabled: true, root_name: ['public-web'] as [string] }
+    const config = {
+      enabled: true,
+      folder_id: [9] as [number],
+      root_name: 'public-web'
+    }
+    const service = {
+      admin_set_website_config: vi.fn().mockResolvedValue({ Ok: config })
+    }
+    const bucket = bucketWith(service)
+
+    await expect(bucket.adminSetWebsiteConfig(input)).resolves.toBe(config)
+    expect(service.admin_set_website_config).toHaveBeenCalledWith(input)
+  })
+
   test('passes the current access token to entry, manifest, and batch methods', async () => {
     const ensured = { id: 7 }
     const batchFolders = { results: [] }
@@ -188,6 +373,7 @@ describe('BucketCanister v2 service wiring', () => {
       cycles: [12_000_000_000n],
       reserved_cycles: [500_000_000n]
     }
+    const favorites = { favorites: [], next: [] }
     const service = {
       ensure_folder: vi.fn().mockResolvedValue({ Ok: ensured }),
       batch_ensure_folders: vi.fn().mockResolvedValue({ Ok: batchFolders }),
@@ -196,7 +382,15 @@ describe('BucketCanister v2 service wiring', () => {
       get_entry: vi.fn().mockResolvedValue({ Ok: [entry] }),
       list_entries: vi.fn().mockResolvedValue({ Ok: entries }),
       get_subtree_manifest: vi.fn().mockResolvedValue({ Ok: manifest }),
-      get_storage_metrics: vi.fn().mockResolvedValue({ Ok: storageMetrics })
+      get_storage_metrics: vi.fn().mockResolvedValue({ Ok: storageMetrics }),
+      resolve_encryption_zones: vi
+        .fn()
+        .mockResolvedValue({ Ok: [{ folder_id: 7, zone: [] }] }),
+      get_file_favorite_ids: vi
+        .fn()
+        .mockResolvedValue({ Ok: Uint32Array.from([9]) }),
+      list_file_favorites: vi.fn().mockResolvedValue({ Ok: favorites }),
+      set_file_favorite: vi.fn().mockResolvedValue({ Ok: true })
     }
     const bucket = bucketWith(service)
     const ensureInput = { request_id: new Uint8Array([1]) }
@@ -206,6 +400,8 @@ describe('BucketCanister v2 service wiring', () => {
     const entryInput = { parent: 0, name: 'asset.txt' }
     const listInput = { parent: 0, cursor: [], take: [100] }
     const manifestInput = { root: 0, cursor: [], take: [100] }
+    const favoriteListInput = { cursor: [], take: [1000] }
+    const favoriteInput = { file_id: 9, favorite: true }
 
     await expect(bucket.ensureFolder(ensureInput as never)).resolves.toBe(
       ensured
@@ -223,8 +419,28 @@ describe('BucketCanister v2 service wiring', () => {
       bucket.getSubtreeManifest(manifestInput as never)
     ).resolves.toBe(manifest)
     await expect(bucket.getStorageMetrics()).resolves.toBe(storageMetrics)
+    await expect(bucket.resolveEncryptionZones([7])).resolves.toEqual([
+      { folder_id: 7, zone: [] }
+    ])
+    await expect(bucket.getFileFavoriteIds()).resolves.toEqual([9])
+    await expect(
+      bucket.listFileFavorites(favoriteListInput as never)
+    ).resolves.toBe(favorites)
+    await expect(bucket.setFileFavorite(favoriteInput)).resolves.toBe(true)
 
     expect(service.ensure_folder).toHaveBeenCalledWith(ensureInput, [token])
+    expect(service.get_file_favorite_ids).toHaveBeenCalledWith()
+    expect(service.resolve_encryption_zones).toHaveBeenCalledWith(
+      Uint32Array.from([7]),
+      [token]
+    )
+    expect(service.list_file_favorites).toHaveBeenCalledWith(
+      favoriteListInput,
+      [token]
+    )
+    expect(service.set_file_favorite).toHaveBeenCalledWith(favoriteInput, [
+      token
+    ])
     expect(service.batch_ensure_folders).toHaveBeenCalledWith(
       batchFolderInput,
       [token]
@@ -298,6 +514,88 @@ describe('BucketCanister v2 service wiring', () => {
     expect(service.get_directory_storage_health).toHaveBeenCalledWith([token])
   })
 
+  test('wires unified share messages without ordinary bearer tokens', async () => {
+    const shareId = new Uint8Array(16).fill(3)
+    const channel = { enabled: true, revision: 2n }
+    const message = { body: ['hello'], created_at_ms: 1n }
+    const page = { messages: [message], next: [] }
+    const setInput = {
+      request_id: new Uint8Array([1]),
+      share_id: shareId,
+      enabled: true,
+      expected_channel_revision: [1n]
+    }
+    const submitInput = {
+      request_id: new Uint8Array([2]),
+      origin: {
+        DirectShare: {
+          credential: {
+            share_id: shareId,
+            secret: new Uint8Array(32).fill(4)
+          }
+        }
+      },
+      body: 'hello',
+      safety_attestation: []
+    }
+    const listInput = {
+      cursor: [],
+      take: [100],
+      origin: [],
+      include_deleted: []
+    }
+    const mutationInput = {
+      request_id: new Uint8Array([3]),
+      key: {
+        DirectShare: {
+          share_id: shareId,
+          sender: Principal.anonymous()
+        }
+      }
+    }
+    const service = {
+      get_folder_share_message_channel: vi
+        .fn()
+        .mockResolvedValue({ Ok: channel }),
+      set_folder_share_messages: vi.fn().mockResolvedValue({ Ok: channel }),
+      submit_share_message: vi.fn().mockResolvedValue({ Ok: message }),
+      list_my_share_messages: vi.fn().mockResolvedValue(page),
+      retract_sent_share_message: vi.fn().mockResolvedValue({ Ok: message }),
+      delete_my_share_message: vi.fn().mockResolvedValue({ Ok: message })
+    }
+    const bucket = bucketWith(service)
+
+    await expect(bucket.getFolderShareMessageChannel(shareId)).resolves.toBe(
+      channel
+    )
+    await expect(
+      bucket.setFolderShareMessages(setInput as never)
+    ).resolves.toBe(channel)
+    await expect(bucket.submitShareMessage(submitInput as never)).resolves.toBe(
+      message
+    )
+    await expect(bucket.listMyShareMessages(listInput as never)).resolves.toBe(
+      page
+    )
+    await expect(
+      bucket.retractSentShareMessage(mutationInput as never)
+    ).resolves.toBe(message)
+    await expect(
+      bucket.deleteMyShareMessage(mutationInput as never)
+    ).resolves.toBe(message)
+
+    expect(service.get_folder_share_message_channel).toHaveBeenCalledWith(
+      shareId
+    )
+    expect(service.set_folder_share_messages).toHaveBeenCalledWith(setInput)
+    expect(service.submit_share_message).toHaveBeenCalledWith(submitInput)
+    expect(service.list_my_share_messages).toHaveBeenCalledWith(listInput)
+    expect(service.retract_sent_share_message).toHaveBeenCalledWith(
+      mutationInput
+    )
+    expect(service.delete_my_share_message).toHaveBeenCalledWith(mutationInput)
+  })
+
   test('updates or clears the token and surfaces Result errors', async () => {
     const service = {
       get_gc_health: vi
@@ -310,10 +608,13 @@ describe('BucketCanister v2 service wiring', () => {
     const replacement = new Uint8Array([7, 7])
 
     expect(bucket.setAccessToken(replacement)).toBe(bucket)
+    replacement.fill(0)
     await bucket.getGcHealth()
-    expect(service.get_gc_health).toHaveBeenNthCalledWith(1, [replacement])
+    expect(service.get_gc_health).toHaveBeenNthCalledWith(1, [
+      new Uint8Array([7, 7])
+    ])
 
-    bucket.setAccessToken()
+    expect(bucket.clearAccessToken()).toBe(bucket)
     await bucket.getGcHealth()
     expect(service.get_gc_health).toHaveBeenNthCalledWith(2, [])
     await expect(bucket.getGcHealth()).rejects.toBe('permission denied')

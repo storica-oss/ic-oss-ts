@@ -81,6 +81,47 @@ async function readFile(bucket: BucketCanister, fileId: number) {
 
 Use bounded ranges for large files. Passing the descriptor's `generation` prevents bytes from different file versions being mixed during a replacement.
 
+## Encryption Zones (experimental)
+
+The encryption APIs derive and verify a VetKD key locally, wrap one random Zone key, and encrypt every file with a new random file key. Neither key is persisted by this SDK. Encrypted uploads use the Bucket's atomic upload session (`begin/upload/commit`), so an incomplete session is never exposed as a completed file. Check `getCapabilities()` before presenting this flow, and keep the identity available: losing it can make data unrecoverable.
+
+```ts
+const capabilities = await bucket.getCapabilities()
+if (capabilities.encryption_zones[0] !== true || capabilities.bucket_vetkd[0] !== true) {
+  throw new Error('This Bucket does not support Encryption Zones')
+}
+
+const zoneId = crypto.getRandomValues(new Uint8Array(32))
+const requestId = crypto.getRandomValues(new Uint8Array(16))
+const pending = await bucket.createRootEncryptionZone({
+  zone_id: zoneId,
+  root_folder_id: 0,
+  parent_zone_id: [],
+  request_id: requestId
+})
+const zone = await bucket.initializePendingEncryptionZone(pending)
+const uploader = new Uploader(bucket)
+await uploader.uploadEncrypted({
+  parent: 0,
+  content: file,
+  size: file.size,
+  name: file.name,
+  contentType: file.type || 'application/octet-stream'
+}, zone)
+
+// Returns plaintext only after every chunk and the stored ciphertext hash pass.
+const plaintext = await bucket.readEncryptedFile(42)
+```
+
+`readEncryptedFile` buffers the whole plaintext and is appropriate for bounded files. For large
+files, `readEncryptedFileStream(id)` returns `{ file, stream, closed }`; write `stream` to a staging
+sink and only publish it after `closed` resolves. A rejected `closed` means no staged bytes may be
+used. `EncryptionZoneKeyCache` is an opt-in, bounded TTL memory cache for
+`openEncryptionZoneCached`; call `clear()` on logout. It never uses localStorage or IndexedDB.
+`clearOpenedEncryptionZone` provides best-effort zeroization when a caller owns the opened key.
+The Bucket HTTP interface intentionally serves encrypted objects as ciphertext and never previews
+them as media.
+
 ## Authentication options
 
 - **IC Identity**: create an `HttpAgent` with an Internet Identity, Ed25519, or other authorized `Identity`.

@@ -1,14 +1,18 @@
 type AbortUploadInput = record { request_id : blob; session_id : blob };
+type ArchiveEncryptionZoneInput = record {
+  zone_id : blob;
+  expected_revision : nat64;
+};
 type BatchCreateSmallFilesInput = record {
   files : vec CreateFileInput;
   request_id : blob;
 };
-type BatchCreateSmallFilesOutput = record { results : vec Result_6 };
+type BatchCreateSmallFilesOutput = record { results : vec Result_9 };
 type BatchEnsureFoldersInput = record {
   request_id : blob;
   folders : vec CreateFolderInput;
 };
-type BatchEnsureFoldersOutput = record { results : vec Result_9 };
+type BatchEnsureFoldersOutput = record { results : vec Result_12 };
 type BatchUpsertReaderGrantsInput = record {
   request_id : blob;
   grants : vec ReaderGrantSpec;
@@ -23,6 +27,7 @@ type BeginUploadInput = record {
   expected_parent_revision : nat64;
   name : text;
   size : nat64;
+  encryption : opt EncryptionInfoV1;
   content_type : text;
   replace : opt ReplaceFileInput;
   parent : nat32;
@@ -37,14 +42,24 @@ type BeginUploadOutput = record {
 };
 type BucketCapabilities = record {
   batch_operations : opt bool;
+  folder_shares : opt bool;
+  share_manifest : opt bool;
   reader_grants : opt bool;
   api_version : nat16;
+  bucket_vetkd : opt bool;
+  encryption_zones : opt bool;
   incremental_gc : bool;
   migration_state : MigrationState;
+  file_favorites : opt bool;
+  share_messages_v1 : opt bool;
+  encryption_format_version : opt nat16;
   ensure_folder : bool;
   storage_metrics : opt bool;
   conditional_delete : bool;
+  encryption_writes : opt bool;
   unique_names : bool;
+  market_bottle_inbox : opt bool;
+  vetkd_derivation : opt bool;
   get_entry : bool;
   http_read_modes : opt bool;
   storage_version : nat16;
@@ -62,8 +77,15 @@ type BucketInfo = record {
   name : text;
   max_custom_data_size : nat16;
   auditors : vec principal;
+  // Present on buckets that support isolated public website hosting.
+  website : opt WebsiteConfig;
   http_read_mode : opt HttpReadMode;
+  // Enables Zone creation and mutations inside Encryption Zones.
+  encryption_writes : opt bool;
   total_files : nat64;
+  // Emergency switch for VetKD derivation. Disabling this also prevents
+  // recovery of existing ciphertext and should only be temporary.
+  vetkd_derivation : opt bool;
   max_children : nat16;
   enable_hash_index : bool;
   max_file_size : nat64;
@@ -79,12 +101,19 @@ type BucketInfo = record {
 // while successful growth also depends on subnet capacity and cycle reserves.
 type BucketStorageMetrics = record {
   total_memory_size : nat64;
+  vetkd_cycles_attached : opt nat;
+  encryption_zones : opt nat64;
+  vetkd_derive_attempts : opt nat64;
   stable_memory_size : nat64;
   // Spendable cycles currently held by the Bucket.
   cycles : opt nat;
+  vetkd_derive_in_flight : opt nat32;
+  vetkd_derive_rejections : opt nat64;
   stable_memory_limit : nat64;
+  vetkd_derive_successes : opt nat64;
   wasm_memory_size : nat64;
   memory_allocation : nat64;
+  vetkd_derive_failures : opt nat64;
   // Cycles reserved by the subnet for future storage payments.
   reserved_cycles : opt nat;
 };
@@ -133,6 +162,12 @@ type CanisterStatusType = variant {
   // The canister is running.
   running;
 };
+type CollectFolderShareGarbageOutput = record {
+  remaining_shares : nat64;
+  remaining_replays : nat64;
+  removed_shares : nat16;
+  removed_replays : nat16;
+};
 type CollectGarbageInput = record {
   // Maximum number of chunk slots to process in this call.
   max_chunks : opt nat32;
@@ -144,12 +179,101 @@ type CollectGarbageOutput = record {
   completed_items : nat32;
   remaining_chunks : nat64;
 };
+type CollectMarketListingGarbageOutput = record {
+  removed_tickets : nat16;
+  remaining_tickets : nat64;
+};
+type CollectShareMessageGarbageOutput = record {
+  remaining_messages : nat64;
+  removed_messages : nat16;
+  remaining_body_bytes : nat64;
+};
 type CommitUploadOutput = record {
   id : nat32;
   created : bool;
   committed_at : nat64;
   generation : nat64;
   revision : nat64;
+};
+type ConsentError = variant {
+  GenericError : record { description : text; error_code : nat };
+  InsufficientPayment : ConsentErrorInfo;
+  UnsupportedCanisterCall : ConsentErrorInfo;
+  ConsentMessageUnavailable : ConsentErrorInfo;
+};
+type ConsentErrorInfo = record { description : text };
+type ConsentInfo = record {
+  metadata : ConsentMessageMetadata;
+  consent_message : ConsentMessage;
+};
+type ConsentMessage = variant {
+  FieldsDisplayMessage : record {
+    fields : vec record { text; ConsentValue };
+    intent : text;
+  };
+  GenericDisplayMessage : text;
+};
+type ConsentMessageDeviceSpec = variant { GenericDisplay; FieldsDisplay };
+type ConsentMessageMetadata = record {
+  utc_offset_minutes : opt int16;
+  language : text;
+};
+type ConsentMessageRequest = record {
+  arg : blob;
+  method : text;
+  user_preferences : ConsentMessageSpec;
+};
+type ConsentMessageResponse = variant { Ok : ConsentInfo; Err : ConsentError };
+type ConsentMessageSpec = record {
+  metadata : ConsentMessageMetadata;
+  device_spec : opt ConsentMessageDeviceSpec;
+};
+type ConsentValue = variant {
+  Text : TextValue;
+  TokenAmount : TokenAmount;
+  TimestampSeconds : DurationSeconds;
+  DurationSeconds : DurationSeconds;
+};
+type ConsumeMarketListingTicketInput = record {
+  request_id : blob;
+  ticket : blob;
+  credential : FolderShareCredential;
+  bottle_id : nat64;
+  publisher : principal;
+};
+type ConsumedMarketListing = record {
+  share_revision : nat64;
+  listing_manifest_revision : nat64;
+  bottle_id : nat64;
+  share_id : blob;
+  publisher : principal;
+  channel_revision : nat64;
+  market : principal;
+  bucket : principal;
+  share_title : text;
+  share_expires_at_ms : nat64;
+};
+type ContentCipher = variant { XChaCha20Poly1305 };
+type ContentSafetyMode = variant { Required; RuleOnly };
+type ContentSafetyPublicKey = record {
+  public_key : blob;
+  key_id : text;
+  not_before_ms : nat64;
+  expires_at_ms : nat64;
+};
+type ContentSafetyVerifierConfig = record {
+  text_policy_version : text;
+  clock_skew_ms : nat64;
+  max_attestation_ttl_ms : nat64;
+  keys : vec ContentSafetyPublicKey;
+  mode : ContentSafetyMode;
+  policy_version : text;
+};
+type CreateEncryptionZoneInput = record {
+  request_id : blob;
+  root_folder_id : nat32;
+  zone_id : blob;
+  parent_zone_id : opt blob;
 };
 type CreateFileInput = record {
   dek : opt blob;
@@ -159,11 +283,24 @@ type CreateFileInput = record {
   hash : opt blob;
   name : text;
   size : opt nat64;
+  encryption : opt EncryptionInfoV1;
   content_type : text;
   parent : nat32;
 };
 type CreateFileOutput = record { id : nat32; created_at : nat64 };
 type CreateFolderInput = record { name : text; parent : nat32 };
+type CreateFolderShareInput = record {
+  request_id : blob;
+  access : ShareAccessMode;
+  title : text;
+  share_id : blob;
+  root_folder : nat32;
+  secret_hash : blob;
+  // Opaque, canister-scoped hash of an optional human-friendly share code.
+  // The plaintext code is never persisted by the canister.
+  share_code_hash : opt blob;
+  expires_at_ms : nat64;
+};
 // # Definite Canister Settings
 //
 // Represents the actual settings in effect.
@@ -199,6 +336,17 @@ type DeleteEntryIfInput = record {
   expected_hash : opt blob;
   expected_revision : nat64;
 };
+type DeriveZoneKeyInput = record {
+  expected_key_version : nat32;
+  zone_id : blob;
+  transport_public_key : blob;
+};
+type DerivedZoneKey = record {
+  encrypted_key : blob;
+  provider : KeyProviderRef;
+  key_version : nat32;
+  public_key : blob;
+};
 type DirectoryStorageHealth = record {
   migration_error : opt text;
   stable_folders : nat64;
@@ -213,6 +361,37 @@ type DomainConfig = record {
   custom_domains : vec text;
   canister_id : principal;
 };
+type DurationSeconds = record { amount : nat64 };
+type EncryptionInfoV1 = record {
+  nonce_prefix : blob;
+  plaintext_size : nat64;
+  envelope : FileKeyEnvelopeV1;
+  object_id : blob;
+  cipher : ContentCipher;
+  version : nat16;
+  plaintext_chunk_size : nat32;
+  zone_id : blob;
+};
+type EncryptionProfile = record {
+  updated_at : nat64;
+  root_zone_id : opt blob;
+  created_at : nat64;
+  enabled : bool;
+};
+type EncryptionZone = record {
+  root_folder_id : nat32;
+  updated_at : nat64;
+  key_envelopes : vec ZoneKeyEnvelopeV1;
+  owner : principal;
+  created_at : nat64;
+  state : EncryptionZoneState;
+  zone_id : blob;
+  revision : nat64;
+  active_envelope : opt nat16;
+  parent_zone_id : opt blob;
+  policy : KeyPolicy;
+};
+type EncryptionZoneState = variant { PendingInitialization; Active; Archived };
 type EnsureFolderInput = record {
   request_id : blob;
   name : text;
@@ -267,6 +446,14 @@ type FileDescriptor = record {
   chunks : nat32;
   chunk_size : nat32;
 };
+// A Bucket keeps a bounded, per-principal set of file favorites. The entry is
+// optional so a user can still see and remove a favorite after the underlying
+// file was deleted or their read permission changed.
+type FileFavorite = record {
+  entry : opt EntryInfoV2;
+  favorited_at_ms : nat64;
+  file_id : nat32;
+};
 type FileInfo = record {
   ex : opt vec record { text; MetadataValue };
   id : nat32;
@@ -278,12 +465,20 @@ type FileInfo = record {
   name : text;
   size : nat64;
   generation : nat64;
+  encryption : opt EncryptionInfoV1;
   content_type : text;
   created_at : nat64;
   filled : nat64;
   chunks : nat32;
   revision : nat64;
   parent : nat32;
+};
+type FileKeyEnvelopeV1 = record {
+  cipher : ContentCipher;
+  aad_hash : blob;
+  version : nat16;
+  nonce : blob;
+  wrapped_dek : blob;
 };
 type FolderInfo = record {
   id : nat32;
@@ -297,6 +492,39 @@ type FolderInfo = record {
   parent : nat32;
 };
 type FolderName = record { id : nat32; name : text };
+type FolderShare = record {
+  status : FolderShareStatus;
+  access : ShareAccessMode;
+  title : text;
+  share_id : blob;
+  updated_at_ms : nat64;
+  created_by : principal;
+  created_at_ms : nat64;
+  root_folder : nat32;
+  revision : nat64;
+  revoked_at_ms : opt nat64;
+  expires_at_ms : nat64;
+};
+type FolderShareCredential = record { share_id : blob; secret : blob };
+type FolderShareError = variant {
+  Internal : text;
+  InvalidInput : text;
+  EncryptedZone;
+  NotFound;
+  Unavailable;
+  LimitExceeded : text;
+  RangeOutOfBounds : text;
+  Conflict : text;
+};
+type FolderShareStatus = variant { Active; Revoked; Expired };
+type FolderShareView = record {
+  access : ShareAccessMode;
+  title : text;
+  share_id : blob;
+  root_folder : nat32;
+  revision : nat64;
+  expires_at_ms : nat64;
+};
 type GcHealth = record {
   pending_chunks : nat64;
   pending_items : nat64;
@@ -313,12 +541,31 @@ type InitArgs = record {
   governance_canister : opt principal;
   name : text;
   max_custom_data_size : nat16;
+  encryption_writes : opt bool;
+  vetkd_derivation : opt bool;
   max_children : nat16;
   enable_hash_index : bool;
   max_file_size : nat64;
   visibility : nat8;
   max_folder_depth : nat8;
   file_id : nat32;
+};
+type InitializeEncryptionZoneKeyInput = record {
+  envelope : ZoneKeyEnvelopeV1;
+  zone_id : blob;
+  expected_revision : nat64;
+};
+type IssueMarketListingTicketInput = record {
+  request_id : blob;
+  market_request_id : blob;
+  share_id : blob;
+  market : principal;
+  expected_share_revision : nat64;
+};
+type KeyPolicy = variant { VaultManaged; OwnerOnly };
+type KeyProviderRef = variant {
+  BucketVetkd : record { bucket : principal };
+  VaultVetkd : record { vault : principal; vault_id : blob; key_ref : blob };
 };
 type ListEntriesInput = record {
   cursor : opt EntryCursor;
@@ -330,6 +577,30 @@ type ListEntriesOutput = record {
   entries : vec EntryInfoV2;
   parent_revision : nat64;
 };
+type ListFileFavoritesInput = record { cursor : opt nat32; take : opt nat16 };
+type ListFileFavoritesOutput = record {
+  favorites : vec FileFavorite;
+  next : opt nat32;
+};
+type ListFolderSharesInput = record {
+  cursor : opt blob;
+  take : opt nat16;
+  include_inactive : opt bool;
+};
+type ListFolderSharesOutput = record {
+  shares : vec FolderShare;
+  next : opt blob;
+};
+type ListShareMessagesInput = record {
+  include_deleted : opt bool;
+  cursor : opt ShareMessageCursor;
+  origin : opt ShareMessageOriginKind;
+  take : opt nat16;
+};
+type ListShareMessagesOutput = record {
+  messages : vec OssShareMessage;
+  next : opt ShareMessageCursor;
+};
 // # Log Visibility.
 type LogVisibility = variant {
   // Controllers.
@@ -339,11 +610,33 @@ type LogVisibility = variant {
   // Allowed viewers.
   allowed_viewers : vec principal;
 };
+type LookupFolderShareCodeInput = record { code_hash : blob };
+type LookupFolderShareCodeOutput = record { share_id : blob };
 type ManifestEntry = record { path : text; entry : EntryInfoV2 };
 type ManifestFrame = record {
   after : opt EntryRef;
   path : text;
   folder_id : nat32;
+};
+type MarketListingError = variant {
+  Internal : text;
+  AlreadyConsumed;
+  InvalidInput : text;
+  NotFound;
+  Unauthorized;
+  Unavailable;
+  LimitExceeded : text;
+  Expired;
+  Conflict : text;
+};
+type MarketListingTicketView = record {
+  share_revision : nat64;
+  market_request_id : blob;
+  ticket : blob;
+  share_id : blob;
+  publisher : principal;
+  market : principal;
+  expires_at_ms : nat64;
 };
 // # Memory Metrics
 //
@@ -427,6 +720,20 @@ type OAuthPublicConfig = record {
   wechat : opt OAuthProviderPublicConfig;
 };
 type OAuthReviewInput = record { key : text; status : OAuthAccountStatus };
+type OssShareMessage = record {
+  key : ShareMessageKey;
+  reported_at_ms : opt nat64;
+  report_reason : opt text;
+  body : opt text;
+  origin : ShareMessageOriginView;
+  sender : principal;
+  created_at_ms : nat64;
+  sender_alias : text;
+  body_sha256 : blob;
+  moderation_policy_version : text;
+  retracted_at_ms : opt nat64;
+  deleted_at_ms : opt nat64;
+};
 // # Query Stats
 //
 // Query statistics.
@@ -483,55 +790,272 @@ type ReaderPolicy = record {
 };
 type RenewUploadOutput = record { expires_at : nat64 };
 type ReplaceFileInput = record { id : nat32; expected_revision : nat64 };
+type ReportShareMessageInput = record {
+  key : ShareMessageKey;
+  request_id : blob;
+  reason : text;
+};
+type ResolveFolderShareInput = record { credential : FolderShareCredential };
+type ResolveFolderShareOutput = record {
+  root : SharedFolderInfo;
+  // Visitor-visible projection only; channel metadata remains private.
+  messages_enabled : bool;
+  share : FolderShareView;
+};
+type ResolvedEncryptionZone = record {
+  zone : opt EncryptionZone;
+  folder_id : nat32;
+};
 type Result = variant { Ok : bool; Err : SyncError };
 type Result_1 = variant { Ok; Err : text };
-type Result_10 = variant { Ok : BatchEnsureFoldersOutput; Err : SyncError };
-type Result_11 = variant { Ok : BeginUploadOutput; Err : SyncError };
-type Result_12 = variant { Ok : CollectGarbageOutput; Err : SyncError };
-type Result_13 = variant { Ok : CommitUploadOutput; Err : SyncError };
-type Result_14 = variant { Ok : CreateFileOutput; Err : text };
-type Result_15 = variant { Ok : bool; Err : text };
-type Result_16 = variant { Ok : BucketInfo; Err : text };
-type Result_17 = variant { Ok : CanisterStatusResult; Err : text };
-type Result_18 = variant { Ok : DirectoryStorageHealth; Err : SyncError };
-type Result_19 = variant { Ok : opt EntryInfoV2; Err : SyncError };
+type Result_10 = variant { Ok : BatchCreateSmallFilesOutput; Err : SyncError };
+type Result_11 = variant { Ok : vec nat32; Err : text };
+type Result_12 = variant { Ok : EnsureFolderOutput; Err : SyncError };
+type Result_13 = variant { Ok : BatchEnsureFoldersOutput; Err : SyncError };
+type Result_14 = variant { Ok : BeginUploadOutput; Err : SyncError };
+type Result_15 = variant { Ok : CollectGarbageOutput; Err : SyncError };
+type Result_16 = variant { Ok : CommitUploadOutput; Err : SyncError };
+type Result_17 = variant {
+  Ok : ConsumedMarketListing;
+  Err : MarketListingError;
+};
+type Result_18 = variant { Ok : CreateFileOutput; Err : text };
+type Result_19 = variant { Ok : FolderShare; Err : FolderShareError };
 type Result_2 = variant { Ok : ReaderGrant; Err : ReaderGrantError };
-type Result_20 = variant { Ok : vec FolderName; Err : text };
-type Result_21 = variant { Ok : vec record { nat32; blob }; Err : text };
-type Result_22 = variant { Ok : FileDescriptor; Err : text };
-type Result_23 = variant { Ok : FileInfo; Err : text };
-type Result_24 = variant { Ok : FolderInfo; Err : text };
-type Result_25 = variant { Ok : GcHealth; Err : SyncError };
-type Result_26 = variant { Ok : opt ReaderGrant; Err : ReaderGrantError };
-type Result_27 = variant { Ok : BucketStorageMetrics; Err : text };
-type Result_28 = variant { Ok : SubtreeManifestOutput; Err : SyncError };
-type Result_29 = variant { Ok : UploadHealth; Err : SyncError };
+type Result_20 = variant { Ok : bool; Err : text };
+type Result_21 = variant { Ok : OssShareMessage; Err : ShareMessageError };
+type Result_22 = variant { Ok : DerivedZoneKey; Err : SyncError };
+type Result_23 = variant { Ok : BucketInfo; Err : text };
+type Result_24 = variant { Ok : CanisterStatusResult; Err : text };
+type Result_25 = variant { Ok : DirectoryStorageHealth; Err : SyncError };
+type Result_26 = variant { Ok : opt EntryInfoV2; Err : SyncError };
+type Result_27 = variant { Ok : vec FolderName; Err : text };
+type Result_28 = variant { Ok : vec record { nat32; blob }; Err : text };
+type Result_29 = variant { Ok : FileDescriptor; Err : text };
 type Result_3 = variant {
   Ok : BatchUpsertReaderGrantsOutput;
   Err : ReaderGrantError;
 };
-type Result_30 = variant { Ok : UploadStatusOutput; Err : SyncError };
-type Result_31 = variant { Ok : ListEntriesOutput; Err : SyncError };
-type Result_32 = variant { Ok : vec FileInfo; Err : text };
-type Result_33 = variant { Ok : vec FolderInfo; Err : text };
-type Result_34 = variant { Ok : UpdateFileOutput; Err : text };
-type Result_35 = variant { Ok : OAuthBeginOutput; Err : text };
-type Result_36 = variant { Ok : OAuthCompleteOutput; Err : text };
-type Result_37 = variant { Ok : blob; Err : text };
-type Result_38 = variant { Ok : RenewUploadOutput; Err : SyncError };
-type Result_39 = variant { Ok : UpdateFileChunkOutput; Err : text };
+type Result_30 = variant { Ok : FileInfo; Err : text };
+type Result_31 = variant { Ok : FolderInfo; Err : text };
+type Result_32 = variant { Ok : ShareMessageChannel; Err : ShareMessageError };
+type Result_33 = variant { Ok : GcHealth; Err : SyncError };
+type Result_34 = variant {
+  Ok : MarketListingTicketView;
+  Err : MarketListingError;
+};
+type Result_35 = variant { Ok : opt EncryptionProfile; Err : SyncError };
+type Result_36 = variant { Ok : opt ReaderGrant; Err : ReaderGrantError };
+type Result_37 = variant { Ok : BucketStorageMetrics; Err : text };
+type Result_38 = variant { Ok : SubtreeManifestOutput; Err : SyncError };
+type Result_39 = variant { Ok : UploadHealth; Err : SyncError };
 type Result_4 = variant { Ok : OAuthAccount; Err : text };
-type Result_40 = variant { Ok : UploadChunkOutput; Err : SyncError };
-type Result_41 = variant { Ok : text; Err : text };
-type Result_5 = variant { Ok : TransferCyclesOutput; Err : text };
-type Result_6 = variant { Ok : CreateFileOutput; Err : SyncError };
-type Result_7 = variant { Ok : BatchCreateSmallFilesOutput; Err : SyncError };
-type Result_8 = variant { Ok : vec nat32; Err : text };
-type Result_9 = variant { Ok : EnsureFolderOutput; Err : SyncError };
+type Result_40 = variant { Ok : UploadStatusOutput; Err : SyncError };
+type Result_41 = variant { Ok : ListEntriesOutput; Err : SyncError };
+type Result_42 = variant { Ok : ListFileFavoritesOutput; Err : text };
+type Result_43 = variant { Ok : vec FileInfo; Err : text };
+type Result_44 = variant { Ok : vec FolderInfo; Err : text };
+type Result_45 = variant {
+  Ok : LookupFolderShareCodeOutput;
+  Err : FolderShareError;
+};
+type Result_46 = variant { Ok : UpdateFileOutput; Err : text };
+type Result_47 = variant { Ok : OAuthBeginOutput; Err : text };
+type Result_48 = variant { Ok : OAuthCompleteOutput; Err : text };
+type Result_49 = variant { Ok : blob; Err : text };
+type Result_5 = variant { Ok : WebsiteConfig; Err : text };
+type Result_50 = variant { Ok : RenewUploadOutput; Err : SyncError };
+type Result_51 = variant { Ok : opt EncryptionZone; Err : SyncError };
+type Result_52 = variant { Ok : vec ResolvedEncryptionZone; Err : SyncError };
+type Result_53 = variant {
+  Ok : ResolveFolderShareOutput;
+  Err : FolderShareError;
+};
+type Result_54 = variant { Ok : ShareMessageChannel; Err : MarketListingError };
+type Result_55 = variant { Ok : bool; Err : ShareMessageError };
+type Result_56 = variant { Ok : FileDescriptor; Err : FolderShareError };
+type Result_57 = variant {
+  Ok : ShareListEntriesOutput;
+  Err : FolderShareError;
+};
+type Result_58 = variant { Ok : blob; Err : FolderShareError };
+type Result_59 = variant {
+  Ok : ShareSubtreeManifestOutput;
+  Err : FolderShareError;
+};
+type Result_6 = variant { Ok : TransferCyclesOutput; Err : text };
+type Result_60 = variant { Ok : UpdateFileChunkOutput; Err : text };
+type Result_61 = variant { Ok : UploadChunkOutput; Err : SyncError };
+type Result_62 = variant { Ok : text; Err : text };
+type Result_7 = variant {
+  Ok : opt ContentSafetyVerifierConfig;
+  Err : ShareMessageError;
+};
+type Result_8 = variant { Ok : EncryptionZone; Err : SyncError };
+type Result_9 = variant { Ok : CreateFileOutput; Err : SyncError };
+type RetryShareMessageConfirmationsOutput = record {
+  attempted : nat16;
+  remaining : nat64;
+  confirmed : nat16;
+};
+type RevokeFolderShareInput = record {
+  request_id : blob;
+  share_id : blob;
+  expected_revision : opt nat64;
+};
 type RevokeReaderGrantInput = record {
   request_id : blob;
   subject : principal;
   entitlement_version : nat64;
+};
+type RotateFolderShareSecretInput = record {
+  request_id : blob;
+  share_id : blob;
+  secret_hash : blob;
+  expected_revision : opt nat64;
+  // Replaces the previous short-code index. `None` disables short-code
+  // lookup for this share after rotation.
+  share_code_hash : opt blob;
+};
+type SetDriftBottleChannelInput = record {
+  request_id : blob;
+  bottle_id : nat64;
+  publisher : principal;
+  expected_channel_revision : nat64;
+  enabled : bool;
+};
+type SetFileFavoriteInput = record { favorite : bool; file_id : nat32 };
+type SetFolderShareMessagesInput = record {
+  request_id : blob;
+  share_id : blob;
+  expected_channel_revision : opt nat64;
+  enabled : bool;
+};
+type SetShareMessageSenderBlockInput = record {
+  request_id : blob;
+  blocked : bool;
+  sender : principal;
+};
+type SetWebsiteConfigInput = record { root_name : opt text; enabled : bool };
+type ShareAccessMode = variant {
+  Authenticated;
+  AnyoneWithLink;
+  Principals : vec principal;
+};
+type ShareFileInput = record {
+  credential : FolderShareCredential;
+  file_id : nat32;
+};
+type ShareListEntriesInput = record {
+  credential : FolderShareCredential;
+  cursor : opt EntryCursor;
+  take : opt nat16;
+  parent : nat32;
+};
+type ShareListEntriesOutput = record {
+  next : opt EntryCursor;
+  entries : vec SharedEntryInfo;
+  parent_revision : nat64;
+};
+type ShareMessageChannel = record {
+  key : ShareMessageChannelKey;
+  share_revision : opt nat64;
+  share_id : opt blob;
+  updated_at_ms : nat64;
+  created_by : principal;
+  created_at_ms : nat64;
+  enabled : bool;
+  deadline_ms : opt nat64;
+  revision : nat64;
+};
+type ShareMessageChannelKey = variant {
+  DirectShare : blob;
+  DriftBottle : record { bottle_id : nat64; market : principal };
+};
+type ShareMessageCursor = record {
+  key : ShareMessageKey;
+  reverse_created_at : nat64;
+};
+type ShareMessageError = variant {
+  Internal : text;
+  InvalidInput : text;
+  AnonymousNotAllowed;
+  Duplicate;
+  InboxFull;
+  ChannelClosed;
+  NotFound;
+  Unauthorized;
+  SafetyCheckRequired;
+  SafetyCheckUnavailable;
+  SenderBlocked;
+  Unavailable;
+  ExternalAuthorizationUnavailable;
+  DailyLimitExceeded;
+  Conflict : text;
+};
+type ShareMessageKey = variant {
+  DirectShare : record { share_id : blob; sender : principal };
+  DriftBottle : record { catch_id : nat64; market : principal };
+};
+type ShareMessageMutationInput = record {
+  key : ShareMessageKey;
+  request_id : blob;
+};
+type ShareMessageOrigin = variant {
+  DirectShare : ResolveFolderShareInput;
+  DriftBottle : record {
+    bottle_id : nat64;
+    catch_id : nat64;
+    market : principal;
+  };
+};
+type ShareMessageOriginKind = variant { DirectShare; DriftBottle };
+type ShareMessageOriginView = variant {
+  DirectShare : record { share_id : blob; share_title : text };
+  DriftBottle : record {
+    bottle_id : nat64;
+    catch_id : nat64;
+    market : principal;
+  };
+};
+type ShareReadFileChunkInput = record {
+  credential : FolderShareCredential;
+  read : ReadFileChunkInput;
+};
+type ShareReadFileRangeInput = record {
+  credential : FolderShareCredential;
+  read : ReadFileRangeInput;
+};
+type ShareSubtreeManifestInput = record {
+  credential : FolderShareCredential;
+  cursor : opt SubtreeManifestCursor;
+  take : opt nat16;
+};
+type ShareSubtreeManifestOutput = record {
+  next : opt SubtreeManifestCursor;
+  entries : vec SharedManifestEntry;
+  revision : nat64;
+};
+type SharedEntryInfo = record {
+  id : nat32;
+  hash : opt blob;
+  kind : EntryKind;
+  name : text;
+  size : opt nat64;
+  generation : opt nat64;
+  content_type : opt text;
+  revision : nat64;
+  parent : nat32;
+};
+type SharedFolderInfo = record { id : nat32; name : text; revision : nat64 };
+type SharedManifestEntry = record { path : text; entry : SharedEntryInfo };
+type SubmitShareMessageInput = record {
+  request_id : blob;
+  body : text;
+  origin : ShareMessageOrigin;
+  // Reserved for a signed semantic-moderation proof. Rule-only experimental
+  // buckets reject non-empty proofs until a verifier configuration exists.
+  safety_attestation : opt blob;
 };
 type SubtreeManifestCursor = record {
   stack : vec ManifestFrame;
@@ -547,6 +1071,7 @@ type SubtreeManifestOutput = record {
   entries : vec ManifestEntry;
   revision : nat64;
 };
+type SupportedStandard = record { url : text; name : text };
 type SyncError = variant {
   Internal : text;
   InvalidInput : text;
@@ -556,6 +1081,8 @@ type SyncError = variant {
   LimitExceeded : text;
   Conflict : record { entries : vec EntryRef; message : text };
 };
+type TextValue = record { content : text };
+type TokenAmount = record { decimals : nat8; amount : nat64; symbol : text };
 type TransferCyclesInput = record { to_canister : principal; amount : nat };
 type TransferCyclesOutput = record {
   transferred : nat;
@@ -568,6 +1095,8 @@ type UpdateBucketInput = record {
   name : opt text;
   max_custom_data_size : opt nat16;
   http_read_mode : opt HttpReadMode;
+  encryption_writes : opt bool;
+  vetkd_derivation : opt bool;
   max_children : opt nat16;
   enable_hash_index : opt bool;
   max_file_size : opt nat64;
@@ -596,9 +1125,22 @@ type UpdateFolderInput = record {
   status : opt int8;
   name : opt text;
 };
+type UpdateFolderShareInput = record {
+  request_id : blob;
+  access : opt ShareAccessMode;
+  title : opt text;
+  share_id : blob;
+  expected_revision : opt nat64;
+  expires_at_ms : opt nat64;
+};
+type UpdateShareMessageSafetyInput = record {
+  config : opt ContentSafetyVerifierConfig;
+};
 type UpgradeArgs = record {
   governance_canister : opt principal;
   max_custom_data_size : opt nat16;
+  encryption_writes : opt bool;
+  vetkd_derivation : opt bool;
   max_children : opt nat16;
   enable_hash_index : opt bool;
   max_file_size : opt nat64;
@@ -642,6 +1184,22 @@ type UpsertReaderGrantInput = record {
   entitlement_version : nat64;
   expires_at_ms : opt nat64;
 };
+type WebsiteConfig = record {
+  root_name : text;
+  enabled : bool;
+  folder_id : opt nat32;
+};
+type ZoneKeyEnvelopeV1 = record {
+  provider : KeyProviderRef;
+  key_version : nat32;
+  cipher : ContentCipher;
+  aad_hash : blob;
+  protection : ZoneKeyProtection;
+  version : nat16;
+  nonce : blob;
+  wrapped_zwk : blob;
+};
+type ZoneKeyProtection = variant { VetkdAndPassword; VetkdOnly };
 service : (opt CanisterArgs) -> {
   abort_upload : (AbortUploadInput, opt blob) -> (Result);
   admin_add_auditors : (vec principal) -> (Result_1);
@@ -664,75 +1222,158 @@ service : (opt CanisterArgs) -> {
   admin_set_managers : (vec principal) -> (Result_1);
   admin_set_oauth_config : (OAuthConfigInput) -> (Result_1);
   admin_set_reader_authority : (opt principal) -> (Result_1);
-  admin_transfer_cycles : (TransferCyclesInput) -> (Result_5);
+  admin_set_website_config : (SetWebsiteConfigInput) -> (Result_5);
+  admin_set_website_enabled : (bool) -> (Result_5);
+  admin_transfer_cycles : (TransferCyclesInput) -> (Result_6);
   admin_update_bucket : (UpdateBucketInput) -> (Result_1);
-  admin_upsert_reader_grant : (UpsertReaderGrantInput) -> (Result_2);
-  api_version : () -> (nat16) query;
-  batch_create_small_files : (BatchCreateSmallFilesInput, opt blob) -> (
+  admin_update_share_message_safety : (UpdateShareMessageSafetyInput) -> (
       Result_7,
     );
-  batch_delete_subfiles : (nat32, vec nat32, opt blob) -> (Result_8);
-  batch_ensure_folders : (BatchEnsureFoldersInput, opt blob) -> (Result_10);
-  begin_upload : (BeginUploadInput, opt blob) -> (Result_11);
-  collect_garbage : (CollectGarbageInput, opt blob) -> (Result_12);
-  commit_upload : (AbortUploadInput, opt blob) -> (Result_13);
-  create_file : (CreateFileInput, opt blob) -> (Result_14);
-  create_folder : (CreateFolderInput, opt blob) -> (Result_14);
+  admin_upsert_reader_grant : (UpsertReaderGrantInput) -> (Result_2);
+  api_version : () -> (nat16) query;
+  archive_encryption_zone : (ArchiveEncryptionZoneInput, opt blob) -> (
+      Result_8,
+    );
+  batch_create_small_files : (BatchCreateSmallFilesInput, opt blob) -> (
+      Result_10,
+    );
+  batch_delete_subfiles : (nat32, vec nat32, opt blob) -> (Result_11);
+  batch_ensure_folders : (BatchEnsureFoldersInput, opt blob) -> (Result_13);
+  begin_upload : (BeginUploadInput, opt blob) -> (Result_14);
+  collect_folder_share_garbage : (MigrateDirectoryStorageInput) -> (
+      CollectFolderShareGarbageOutput,
+    );
+  collect_garbage : (CollectGarbageInput, opt blob) -> (Result_15);
+  collect_market_listing_garbage : (MigrateDirectoryStorageInput) -> (
+      CollectMarketListingGarbageOutput,
+    );
+  collect_share_message_garbage : (MigrateDirectoryStorageInput) -> (
+      CollectShareMessageGarbageOutput,
+    );
+  commit_upload : (AbortUploadInput, opt blob) -> (Result_16);
+  consume_market_listing_ticket : (ConsumeMarketListingTicketInput) -> (
+      Result_17,
+    );
+  create_child_encryption_zone : (CreateEncryptionZoneInput, opt blob) -> (
+      Result_8,
+    );
+  create_file : (CreateFileInput, opt blob) -> (Result_18);
+  create_folder : (CreateFolderInput, opt blob) -> (Result_18);
+  create_folder_share : (CreateFolderShareInput) -> (Result_19);
+  create_root_encryption_zone : (CreateEncryptionZoneInput, opt blob) -> (
+      Result_8,
+    );
   delete_entry_if : (DeleteEntryIfInput, opt blob) -> (Result);
-  delete_file : (nat32, opt blob) -> (Result_15);
-  delete_folder : (nat32, opt blob) -> (Result_15);
-  ensure_folder : (EnsureFolderInput, opt blob) -> (Result_9);
-  get_bucket_info : (opt blob) -> (Result_16) query;
-  get_canister_status : () -> (Result_17);
+  delete_file : (nat32, opt blob) -> (Result_20);
+  delete_folder : (nat32, opt blob) -> (Result_20);
+  delete_my_share_message : (ShareMessageMutationInput) -> (Result_21);
+  derive_zone_key : (DeriveZoneKeyInput, opt blob) -> (Result_22);
+  ensure_folder : (EnsureFolderInput, opt blob) -> (Result_12);
+  get_bucket_info : (opt blob) -> (Result_23) query;
+  get_canister_status : () -> (Result_24);
   get_capabilities : () -> (BucketCapabilities) query;
-  get_directory_storage_health : (opt blob) -> (Result_18) query;
+  get_directory_storage_health : (opt blob) -> (Result_25) query;
   get_domain_config : () -> (DomainConfig) query;
-  get_entry : (GetEntryInput, opt blob) -> (Result_19) query;
-  get_file_ancestors : (nat32, opt blob) -> (Result_20) query;
-  get_file_chunks : (nat32, nat32, opt nat32, opt blob) -> (Result_21) query;
+  get_encryption_zone : (blob, opt blob) -> (Result_8) query;
+  get_entry : (GetEntryInput, opt blob) -> (Result_26) query;
+  get_file_ancestors : (nat32, opt blob) -> (Result_27) query;
+  get_file_chunks : (nat32, nat32, opt nat32, opt blob) -> (Result_28) query;
   // Returns the media-safe immutable description of a fully committed file.
   // Reader grants are sufficient for this endpoint, but do not expose any
   // directory metadata.
-  get_file_descriptor : (nat32, opt blob) -> (Result_22) query;
-  get_file_info : (nat32, opt blob) -> (Result_23) query;
-  get_file_info_by_hash : (blob, opt blob) -> (Result_23) query;
-  get_folder_ancestors : (nat32, opt blob) -> (Result_20) query;
-  get_folder_info : (nat32, opt blob) -> (Result_24) query;
-  get_gc_health : (opt blob) -> (Result_25) query;
-  get_my_reader_grant : () -> (Result_26) query;
+  get_file_descriptor : (nat32, opt blob) -> (Result_29) query;
+  // Lightweight star-state projection for directory/file views. Unlike the
+  // detailed favorites page this performs no file metadata reads and returns at
+  // most the per-user hard limit of 1,000 ids.
+  get_file_favorite_ids : () -> (Result_11) query;
+  get_file_info : (nat32, opt blob) -> (Result_30) query;
+  get_file_info_by_hash : (blob, opt blob) -> (Result_30) query;
+  get_folder_ancestors : (nat32, opt blob) -> (Result_27) query;
+  get_folder_info : (nat32, opt blob) -> (Result_31) query;
+  get_folder_share : (blob) -> (Result_19) query;
+  get_folder_share_message_channel : (blob) -> (Result_32) query;
+  get_gc_health : (opt blob) -> (Result_33) query;
+  get_market_listing_ticket : (blob) -> (Result_34) query;
+  get_my_encryption_profile : (opt blob) -> (Result_35) query;
+  get_my_reader_grant : () -> (Result_36) query;
   get_oauth_config : () -> (OAuthPublicConfig) query;
+  get_share_message_safety_config : () -> (
+      opt ContentSafetyVerifierConfig,
+    ) query;
   // Returns the storage-only subset of canister status and accepts the same
   // delegated access token as directory reads. The legacy full status endpoint
   // remains unchanged for existing clients.
-  get_storage_metrics : (opt blob) -> (Result_27);
-  get_subtree_manifest : (SubtreeManifestInput, opt blob) -> (Result_28) query;
-  get_upload_health : (opt blob) -> (Result_29) query;
-  get_upload_status : (GetUploadStatusInput, opt blob) -> (Result_30) query;
+  get_storage_metrics : (opt blob) -> (Result_37);
+  get_subtree_manifest : (SubtreeManifestInput, opt blob) -> (Result_38) query;
+  get_upload_health : (opt blob) -> (Result_39) query;
+  get_upload_status : (GetUploadStatusInput, opt blob) -> (Result_40) query;
+  icrc10_supported_standards : () -> (vec SupportedStandard) query;
+  icrc21_canister_call_consent_message : (ConsentMessageRequest) -> (
+      ConsentMessageResponse,
+    );
+  initialize_encryption_zone_key : (
+      InitializeEncryptionZoneKeyInput,
+      opt blob,
+    ) -> (Result_8);
   is_caller_controller : () -> (bool) query;
-  list_entries : (ListEntriesInput, opt blob) -> (Result_31) query;
-  list_files : (nat32, opt nat32, opt nat32, opt blob) -> (Result_32) query;
-  list_folders : (nat32, opt nat32, opt nat32, opt blob) -> (Result_33) query;
-  move_file : (MoveInput, opt blob) -> (Result_34);
-  move_folder : (MoveInput, opt blob) -> (Result_34);
-  oauth_begin : (OAuthBeginInput) -> (Result_35);
-  oauth_complete : (OAuthCompleteInput) -> (Result_36);
+  issue_market_listing_ticket : (IssueMarketListingTicketInput) -> (Result_34);
+  list_entries : (ListEntriesInput, opt blob) -> (Result_41) query;
+  list_file_favorites : (ListFileFavoritesInput, opt blob) -> (Result_42) query;
+  list_files : (nat32, opt nat32, opt nat32, opt blob) -> (Result_43) query;
+  list_folder_shares : (ListFolderSharesInput) -> (
+      ListFolderSharesOutput,
+    ) query;
+  list_folders : (nat32, opt nat32, opt nat32, opt blob) -> (Result_44) query;
+  list_my_share_messages : (ListShareMessagesInput) -> (
+      ListShareMessagesOutput,
+    ) query;
+  lookup_folder_share_code : (LookupFolderShareCodeInput) -> (Result_45) query;
+  move_file : (MoveInput, opt blob) -> (Result_46);
+  move_folder : (MoveInput, opt blob) -> (Result_46);
+  oauth_begin : (OAuthBeginInput) -> (Result_47);
+  oauth_complete : (OAuthCompleteInput) -> (Result_48);
   // Reads exactly one chunk from an expected immutable file generation.
-  read_file_chunk : (ReadFileChunkInput, opt blob) -> (Result_37) query;
+  read_file_chunk : (ReadFileChunkInput, opt blob) -> (Result_49) query;
   // Reads a bounded byte range from an expected immutable file generation.
-  read_file_range : (ReadFileRangeInput, opt blob) -> (Result_37) query;
-  renew_upload : (AbortUploadInput, opt blob) -> (Result_38);
-  update_file_chunk : (UpdateFileChunkInput, opt blob) -> (Result_39);
-  update_file_info : (UpdateFileInput, opt blob) -> (Result_34);
-  update_folder_info : (UpdateFolderInput, opt blob) -> (Result_34);
-  upload_chunk : (UploadChunkInput, opt blob) -> (Result_40);
-  validate2_admin_set_auditors : (vec principal) -> (Result_41);
-  validate2_admin_set_custom_domains : (vec text) -> (Result_41);
-  validate2_admin_set_managers : (vec principal) -> (Result_41);
-  validate2_admin_update_bucket : (UpdateBucketInput) -> (Result_41);
-  validate_admin_add_auditors : (vec principal) -> (Result_41);
-  validate_admin_add_managers : (vec principal) -> (Result_41);
-  validate_admin_remove_auditors : (vec principal) -> (Result_41);
-  validate_admin_remove_managers : (vec principal) -> (Result_41);
+  read_file_range : (ReadFileRangeInput, opt blob) -> (Result_49) query;
+  renew_upload : (AbortUploadInput, opt blob) -> (Result_50);
+  report_share_message : (ReportShareMessageInput) -> (Result_21);
+  resolve_encryption_zone : (nat32, opt blob) -> (Result_51) query;
+  resolve_encryption_zones : (vec nat32, opt blob) -> (Result_52) query;
+  resolve_folder_share : (ResolveFolderShareInput) -> (Result_53) query;
+  retract_sent_share_message : (ShareMessageMutationInput) -> (Result_21);
+  retry_share_message_confirmations : (MigrateDirectoryStorageInput) -> (
+      RetryShareMessageConfirmationsOutput,
+    );
+  revoke_folder_share : (RevokeFolderShareInput) -> (Result_19);
+  rotate_folder_share_secret : (RotateFolderShareSecretInput) -> (Result_19);
+  set_drift_bottle_message_channel : (SetDriftBottleChannelInput) -> (
+      Result_54,
+    );
+  set_file_favorite : (SetFileFavoriteInput, opt blob) -> (Result_20);
+  set_folder_share_messages : (SetFolderShareMessagesInput) -> (Result_32);
+  set_share_message_sender_block : (SetShareMessageSenderBlockInput) -> (
+      Result_55,
+    );
+  share_get_file_descriptor : (ShareFileInput) -> (Result_56) query;
+  share_list_entries : (ShareListEntriesInput) -> (Result_57) query;
+  share_read_file_chunk : (ShareReadFileChunkInput) -> (Result_58) query;
+  share_read_file_range : (ShareReadFileRangeInput) -> (Result_58) query;
+  share_subtree_manifest : (ShareSubtreeManifestInput) -> (Result_59) query;
+  submit_share_message : (SubmitShareMessageInput) -> (Result_21);
+  update_file_chunk : (UpdateFileChunkInput, opt blob) -> (Result_60);
+  update_file_info : (UpdateFileInput, opt blob) -> (Result_46);
+  update_folder_info : (UpdateFolderInput, opt blob) -> (Result_46);
+  update_folder_share : (UpdateFolderShareInput) -> (Result_19);
+  upload_chunk : (UploadChunkInput, opt blob) -> (Result_61);
+  validate2_admin_set_auditors : (vec principal) -> (Result_62);
+  validate2_admin_set_custom_domains : (vec text) -> (Result_62);
+  validate2_admin_set_managers : (vec principal) -> (Result_62);
+  validate2_admin_update_bucket : (UpdateBucketInput) -> (Result_62);
+  validate_admin_add_auditors : (vec principal) -> (Result_62);
+  validate_admin_add_managers : (vec principal) -> (Result_62);
+  validate_admin_remove_auditors : (vec principal) -> (Result_62);
+  validate_admin_remove_managers : (vec principal) -> (Result_62);
   validate_admin_set_auditors : (vec principal) -> (Result_1);
   validate_admin_set_custom_domains : (vec text) -> (Result_1);
   validate_admin_set_managers : (vec principal) -> (Result_1);
